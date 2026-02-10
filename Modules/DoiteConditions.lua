@@ -2347,11 +2347,11 @@ local function _PlayerAuraRemainingSeconds(auraName)
     return nil
   end
 
-  local playerBuffBarSlot = DoitePlayerAuras.GetBuffBarSlot(auraName)
-  if playerBuffBarSlot then
-    local remaining = GetPlayerBuffTimeLeft(playerBuffBarSlot)
-    if remaining and remaining > 0 then
-      return remaining
+  local playerAuraSlot = DoitePlayerAuras.GetActiveAuraSlot(auraName)
+  if playerAuraSlot then
+    local _, remainingMs, _ = GetPlayerAuraDuration(playerAuraSlot)
+    if remainingMs and remainingMs > 0 then
+      return remainingMs / 1000
     end
   end
 

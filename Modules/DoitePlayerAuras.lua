@@ -422,13 +422,22 @@ end)
 
 -- Shared logic for processing spell casts that may consume stacks or clearcasting
 local function ProcessBuffCappedSpell(spellId, casterGUID, targetGUID)
-  if DoiteBuffData.stackConsumers[spellId] then
-    local modifiedBuffName = DoiteBuffData.stackConsumers[spellId].modifiedBuffName
-    local stackChange = DoiteBuffData.stackConsumers[spellId].stackChange
+  if DoiteBuffData.stackModifiers[spellId] then
+    local modifiedBuffName = DoiteBuffData.stackModifiers[spellId].modifiedBuffName
+    local stackChange = DoiteBuffData.stackModifiers[spellId].stackChange
 
     local currentStacks = DoitePlayerAuras.cappedBuffsStacks[modifiedBuffName] or 0
 
-    if currentStacks and stackChange < 0 and currentStacks > 0 then
+    if stackChange > 0 then
+      local maxStacks = DoitePlayerAuras.spellNameToMaxStacks[modifiedBuffName] or 1
+      local newStacks = math.min(currentStacks + stackChange, maxStacks)
+      DoitePlayerAuras.cappedBuffsStacks[modifiedBuffName] = newStacks
+
+      local duration = DoiteBuffData.stackModifiers[spellId].duration
+      if duration then
+        DoitePlayerAuras.cappedBuffsExpirationTime[modifiedBuffName] = GetTime() + duration
+      end
+    elseif stackChange < 0 and currentStacks > 0 then
       local newStacks = math.max(0, currentStacks + stackChange)
       DoitePlayerAuras.cappedBuffsStacks[modifiedBuffName] = newStacks
 

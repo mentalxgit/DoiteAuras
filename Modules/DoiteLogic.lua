@@ -206,6 +206,7 @@ local _precedence = {
 local _DA_TMP_RPN_OUT = {}
 local _DA_TMP_OP_STACK = {}
 local _DA_TMP_EVAL_STACK = {}
+local _DA_TMP_TOKENS = {}
 
 local function _DA_WipeArray(t)
   local i = _len(t)
@@ -334,6 +335,17 @@ local function _EvalRpn(rpn, st)
   return (st[1] == true)
 end
 
+local function _EvaluateStrictAnd(list, n, evalFunc)
+  local i = 1
+  while i <= n do
+    if not evalFunc(list[i]) then
+      return false
+    end
+    i = i + 1
+  end
+  return true
+end
+
 ---------------------------------------------------------------
 -- Generic evaluator
 ---------------------------------------------------------------
@@ -352,14 +364,7 @@ function DoiteLogic.EvaluateGeneric(list, evalFunc)
   end
 
   if not _HasAnyLogicHints(list) then
-    local i = 1
-    while i <= n do
-      if not evalFunc(list[i]) then
-        return false
-      end
-      i = i + 1
-    end
-    return true
+    return _EvaluateStrictAnd(list, n, evalFunc)
   end
 
   if _HasAnyParenHints(list) and not _IsParenStructureValid(list) then
@@ -367,23 +372,11 @@ function DoiteLogic.EvaluateGeneric(list, evalFunc)
     _NotifyLogicResetForCurrentSpell()
 
     -- After reset there are no logic hints anymore, so fall back to the simple AND behaviour.
-    local i = 1
-    while i <= n do
-      if not evalFunc(list[i]) then
-        return false
-      end
-      i = i + 1
-    end
-    return true
+    return _EvaluateStrictAnd(list, n, evalFunc)
   end
 
   -- Reuse a scratch token buffer to avoid per-call allocations
   local tokens = _DA_TMP_TOKENS
-  if not tokens then
-    -- Backward-compatible: define on first use if not present in this file yet
-    _DA_TMP_TOKENS = {}
-    tokens = _DA_TMP_TOKENS
-  end
   _DA_WipeArray(tokens)
 
   local i = 1
@@ -411,26 +404,12 @@ function DoiteLogic.EvaluateGeneric(list, evalFunc)
 
   local ok, rpn = pcall(_ToRpn, tokens, _DA_TMP_RPN_OUT, _DA_TMP_OP_STACK)
   if not ok or not rpn then
-    local j = 1
-    while j <= n do
-      if not evalFunc(list[j]) then
-        return false
-      end
-      j = j + 1
-    end
-    return true
+    return _EvaluateStrictAnd(list, n, evalFunc)
   end
 
   local ok2, res = pcall(_EvalRpn, rpn, _DA_TMP_EVAL_STACK)
   if not ok2 then
-    local j = 1
-    while j <= n do
-      if not evalFunc(list[j]) then
-        return false
-      end
-      j = j + 1
-    end
-    return true
+    return _EvaluateStrictAnd(list, n, evalFunc)
   end
 
   return (res == true)

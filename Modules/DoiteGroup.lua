@@ -69,15 +69,6 @@ local function GetGroupFixedMode(groupName, leaderData)
   return false
 end
 
-local function _ClearMap(t)
-  if not t then
-    return
-  end
-  for k in pairs(t) do
-    t[k] = nil
-  end
-end
-
 local function _ComputeOffset(baseX, baseY, growth, pad, steps)
   local x = baseX
   local y = baseY

@@ -1578,7 +1578,7 @@ function DoiteTrack:_OnSpellCastEvent()
   if selfOnly then
     targetGuid = pGuid
   else
-    if (not targetGuid) or targetGuid == "" or targetGuid == "0x000000000" or targetGuid == "0x0000000000000000" then
+    if _IsBadGuid(targetGuid) then
       local tg = _GetUnitGuidSafe("target")
       if not tg or tg == "" then
         return
@@ -1957,7 +1957,7 @@ function DoiteTrack:_OnAuraNPEvent()
   end
 
   -- Fix invalid/zero targetGuid *after* entry exists.
-  if not targetGuid or targetGuid == "" or targetGuid == "0x000000000" or targetGuid == "0x0000000000000000" then
+  if _IsBadGuid(targetGuid) then
     local selfOnly = false
 
     if event == "AURA_CAST_ON_SELF" then

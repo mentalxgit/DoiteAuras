@@ -35,7 +35,7 @@ _Timestamps are available in the description._
 - Druid [all forms]: [**LINK**](https://pastecode.io/s/g7bhkpjn)
 - Paladin [Seal Tracker]: [**LINK**](https://pastecode.io/s/b3ikammv)
 - Kara40 Boss Debuffs: [**LINK**](https://pastecode.io/s/473z2tgz)
-- Melee consumes: [**LINK**](https://pastecode.io/s/2zkc030o)
+- Melee consumes: [**LINK**](https://pastecode.io/s/5yw61evm)
 
 _To import - copy the text, press the import button inside DoiteAuras in-game and paste._
 

@@ -1158,42 +1158,42 @@ abilityCB:SetWidth(20); abilityCB:SetHeight(20)
 abilityCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 0, -3)
 abilityCB.text = abilityCB:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 abilityCB.text:SetPoint("LEFT", abilityCB, "RIGHT", 2, 0)
-abilityCB.text:SetText("Abilities")
+abilityCB.text:SetText("Ability")
 
 buffCB = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
 buffCB:SetWidth(20); buffCB:SetHeight(20)
-buffCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 65, -3)
+buffCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 60, -3)
 buffCB.text = buffCB:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 buffCB.text:SetPoint("LEFT", buffCB, "RIGHT", 2, 0)
-buffCB.text:SetText("Buffs")
+buffCB.text:SetText("Buff")
 
 debuffCB = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
 debuffCB:SetWidth(20); debuffCB:SetHeight(20)
-debuffCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 120, -3)
+debuffCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 112, -3)
 debuffCB.text = debuffCB:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 debuffCB.text:SetPoint("LEFT", debuffCB, "RIGHT", 2, 0)
-debuffCB.text:SetText("Debuffs")
+debuffCB.text:SetText("Debuff")
 
 -- Items checkbox
 itemsCB = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
 itemsCB:SetWidth(20); itemsCB:SetHeight(20)
-itemsCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 185, -3)
+itemsCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 177, -3)
 itemsCB.text = itemsCB:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 itemsCB.text:SetPoint("LEFT", itemsCB, "RIGHT", 2, 0)
-itemsCB.text:SetText("Items")
+itemsCB.text:SetText("Item")
 
 -- Bars checkbox (to the right of Items)
 barsCB = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
 barsCB:SetWidth(20); barsCB:SetHeight(20)
-barsCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 240, -3)
+barsCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 230, -3)
 barsCB.text = barsCB:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 barsCB.text:SetPoint("LEFT", barsCB, "RIGHT", 2, 0)
-barsCB.text:SetText("Bars")
+barsCB.text:SetText("Bar")
 
 -- Custom checkbox (to the right of Bars)
 customCB = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
 customCB:SetWidth(20); customCB:SetHeight(20)
-customCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 285, -3)
+customCB:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 275, -3)
 customCB.text = customCB:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 customCB.text:SetPoint("LEFT", customCB, "RIGHT", 2, 0)
 customCB.text:SetText("Custom")
@@ -2233,7 +2233,7 @@ local function EnsureDefaults(key)
     end
 end
 
-local function RefreshIcons()
+local function RefreshIcons(force)
     if DA_IsHardDisabled() then
         -- Make sure all existing icon frames stay hidden
         if icons then
@@ -2243,7 +2243,13 @@ local function RefreshIcons()
         end
         return
     end
-    if not _CanRunRefresh() then return end
+    if not _CanRunRefresh(force) then return end
+
+    -- While editing, force the edited key visible so it always shows reliably.
+    local editKey   = _G["DoiteEdit_CurrentKey"]
+    local editFrame = _G["DoiteEdit_Frame"] or _G["DoiteEditMain"] or _G["DoiteEdit"]
+    local editOpen  = (editFrame and editFrame.IsShown and editFrame:IsShown() == 1)
+    local testAll   = (_G["DoiteAuras_TestAll"] == true)
     -- Build a sorted key list by "order" without allocating {key,data,order} tables each refresh.
     local keyList = DoiteAuras._orderedKeyList
     if not keyList then
@@ -2380,6 +2386,14 @@ local function RefreshIcons()
         local wants = false
         if f then
             wants = (f._daShouldShow == true) or (f._daSliding == true)
+        end
+
+        -- Editing/TestAll should treat the icon as "wanted" so layouts & buckets behave predictably.
+        if testAll then
+            wants = true
+        end
+        if editOpen and editKey == key then
+            wants = true
         end
 
         n = n + 1
@@ -2624,6 +2638,8 @@ local function RefreshIcons()
         -- Visibility: conditions OR slide … but the group limit and bucket Disable have final say
         local wantsFromConditions = (f._daShouldShow == true)
         local wantsFromSlide      = (f._daSliding == true)
+        local wantsFromEdit       = (editOpen and editKey == key)
+        local wantsFromTestAll    = (testAll == true)
         local blockedByGroup      = (f._daBlockedByGroup == true)
 
         -- Per-bucket Disable (group/category/ungrouped)
@@ -2632,7 +2648,7 @@ local function RefreshIcons()
             blockedByBucket = DA_IsBucketDisabled(entry.bucketKey)
         end
 
-        local shouldBeVisible = (wantsFromConditions or wantsFromSlide)
+        local shouldBeVisible = (wantsFromConditions or wantsFromSlide or wantsFromEdit or wantsFromTestAll)
                              and (not blockedByGroup)
                              and (not blockedByBucket)
 
@@ -3158,41 +3174,51 @@ local function RefreshList()
                 btn.tag:SetText(typeText)
 
                 -- Scripts are re-bound each refresh (keeps exact existing logic with current locals)
+				btn.removeBtn:SetScript("OnClick", function()
+					-- detect if this was the last icon using them.
+					local groupName    = data and data.group
+					local categoryName = data and data.category
 
-                btn.removeBtn:SetScript("OnClick", function()
-                    -- detect if this was the last icon using them.
-                    local groupName    = data and data.group
-                    local categoryName = data and data.category
+					-- Close the edit frame if it's open for this aura
+					local ef = _G["DoiteEdit_Frame"]
+					if ef and ef:IsShown() and _G["DoiteEdit_CurrentKey"] == key then
+						ef:Hide()
+					end
 
-                    -- Close the edit frame if it's open for this aura
-                    local ef = _G["DoiteEdit_Frame"]
-                    if ef and ef:IsShown() and _G["DoiteEdit_CurrentKey"] == key then
-                        ef:Hide()
+					-- Remove from DoiteAuras DB
+					DoiteAurasDB.spells[key] = nil
+
+					-- Also drop any legacy DoiteDB entry so evaluation stops touching this key
+					if DoiteDB and DoiteDB.icons and DoiteDB.icons[key] then
+						DoiteDB.icons[key] = nil
+					end
+
+					-- Remove cached row frame reference so add/remove cycles don't grow without bound
+					if spellButtons and spellButtons[key] then
+						spellButtons[key]:Hide()
+						spellButtons[key] = nil
+					end
+
+                    -- Immediately hide the icon frame so it disappears even if refresh throttle would skip.
+                    local gf = _G["DoiteIcon_" .. key]
+                    if gf then
+                        gf:Hide()
+                        gf._daShouldShow = nil
+                        gf._daSliding = nil
+                    end
+                    if icons and icons[key] then
+                        icons[key] = nil
                     end
 
-                    -- Remove from DoiteAuras DB
-                    DoiteAurasDB.spells[key] = nil
-
-                    -- Also drop any legacy DoiteDB entry so evaluation stops touching this key
-                    if DoiteDB and DoiteDB.icons and DoiteDB.icons[key] then
-                        DoiteDB.icons[key] = nil
-                    end
-
-                    -- Remove cached row frame reference so add/remove cycles don't grow without bound
-                    if spellButtons and spellButtons[key] then
-                        spellButtons[key]:Hide()
-                        spellButtons[key] = nil
-                    end
-
-                    -- Rebuild ordering + UI
+                    -- Rebuild ordering + UI (force icon refresh so delete is always visible instantly)
                     RebuildOrder()
                     RefreshList()
-                    RefreshIcons()
+                    RefreshIcons(true)
 
-                    if DoiteConditions_RequestEvaluate then
-                        DoiteConditions_RequestEvaluate()
-                    end
-                end)
+					if DoiteConditions_RequestEvaluate then
+						DoiteConditions_RequestEvaluate()
+					end
+				end)
 
                 btn.editBtn:SetScript("OnClick", function()
                     local baseName = data.displayName or data.name or display
@@ -3863,7 +3889,7 @@ _daLoad:SetScript("OnEvent", function()
       else
         -- One or more missing → modern client requirement message
         local list = table.concat(missing, ", ")
-        cf:AddMessage("|cff6FA8DCDoiteAuras:|r This addon requires Nampower 2.25.0+ and UnitXP SP3. Missing: " .. list .. ".")
+        cf:AddMessage("|cff6FA8DCDoiteAuras:|r This addon requires Nampower 2.40.0+ and UnitXP SP3. Missing: " .. list .. ".")
         -- BLOCKER: after printing the message, hard-disable the addon
         _G["DoiteAuras_HardDisabled"] = true
 

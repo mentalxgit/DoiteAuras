@@ -4817,10 +4817,16 @@ local function CheckAbilityConditions(data)
     return true -- if no conditions, always show
   end
   local c = data.conditions.ability
-  -- Precompute target flags (used by Swiftmend guard and generic target gating)
-  local allowHelp = (c.targetHelp == true)
-  local allowHarm = (c.targetHarm == true)
-  local allowSelf = (c.targetSelf == true)
+  -- Consolidated context table: keeps local count lower while preserving hot-path local access.
+  local ctx = {
+    allowHelp = (c.targetHelp == true),
+    allowHarm = (c.targetHarm == true),
+    allowSelf = (c.targetSelf == true),
+    spellName = _GetCanonicalSpellNameFromData(data),
+    spellIndex = nil,
+    tf = nil,
+  }
+  ctx.spellIndex = _GetSpellIndexByName(ctx.spellName)
 
   -- While editing this key, force conditions to pass (always show). Keeps group reflow and any "show"-based logic consistent.
   if _IsKeyUnderEdit(data.key) then
@@ -4839,28 +4845,28 @@ local function CheckAbilityConditions(data)
   --
   -- Cache the result on the data table so ApplyVisuals/_HandleAbilitySlider can suppress the slider without re-evaluating the whole ability logic.
   data._daSliderGuard = nil
-  local _sgFormPass, _sgWeaponPass, _sgAuraPass = nil, nil, nil
+  local _sg = { form = nil, weapon = nil, aura = nil }
 
   if c.slider == true and (c.mode == "usable" or c.mode == "notcd") then
     local okSlider = true
 
     if c.form and c.form ~= "All" then
-      _sgFormPass = DoiteConditions_PassesFormRequirement(c.form) and true or false
-      if not _sgFormPass then
+      _sg.form = DoiteConditions_PassesFormRequirement(c.form) and true or false
+      if not _sg.form then
         okSlider = false
       end
     end
 
     if okSlider and c.weaponFilter and c.weaponFilter ~= "" then
-      _sgWeaponPass = DoiteConditions_PassesWeaponFilter(c) and true or false
-      if not _sgWeaponPass then
+      _sg.weapon = DoiteConditions_PassesWeaponFilter(c) and true or false
+      if not _sg.weapon then
         okSlider = false
       end
     end
 
     if okSlider and c.auraConditions and table.getn(c.auraConditions) > 0 then
-      _sgAuraPass = DoiteConditions_EvaluateAuraConditionsList(c.auraConditions) and true or false
-      if not _sgAuraPass then
+      _sg.aura = DoiteConditions_EvaluateAuraConditionsList(c.auraConditions) and true or false
+      if not _sg.aura then
         okSlider = false
       end
     end
@@ -4869,13 +4875,12 @@ local function CheckAbilityConditions(data)
   end
 
   -- === 1. Cooldown / usability ===
-  local spellName = _GetCanonicalSpellNameFromData(data)
-  local spellIndex = _GetSpellIndexByName(spellName)
+  local spellName = ctx.spellName
+  local spellIndex = ctx.spellIndex
   local bookType = BOOKTYPE_SPELL
-  local foundInBook = (spellIndex ~= nil)
   local onCdNow = false
 
-  if not foundInBook then
+  if not spellIndex then
     return false
   end
 
@@ -4884,11 +4889,9 @@ local function CheckAbilityConditions(data)
   if c.mode == "usable" and spellIndex then
     local _, cls = UnitClass("player");
     cls = cls and string.upper(cls) or ""
-    local onCooldown = onCdNow
-
     -- === WARRIOR override for Overpower/Revenge ===
     if cls == "WARRIOR" and (spellName == "Overpower" or spellName == "Revenge") then
-      if onCooldown then
+      if onCdNow then
         show = false
       else
         local rage = UnitMana("player") or 0
@@ -4909,7 +4912,7 @@ local function CheckAbilityConditions(data)
       -- ===== Normal usable logic (all other classes/spells) =====
       local usable, noMana = _SafeSpellUsable(spellName, spellIndex, bookType)
 
-      if (usable ~= 1) or (noMana == 1) or onCooldown then
+      if (usable ~= 1) or (noMana == 1) or onCdNow then
         show = false
       else
         -- === Usable special cases (guards) ===
@@ -4917,7 +4920,7 @@ local function CheckAbilityConditions(data)
           local needs = _DA_SWIFTMEND_NEEDS
           local ok = false
 
-          if allowHelp and not allowSelf then
+          if ctx.allowHelp and not ctx.allowSelf then
             if UnitExists("target")
                 and UnitIsFriend("player", "target")
                 and (not UnitIsUnit("player", "target")) then
@@ -4926,7 +4929,7 @@ local function CheckAbilityConditions(data)
               ok = false
             end
 
-          elseif allowSelf and not (allowHelp or allowHarm) then
+          elseif ctx.allowSelf and not (ctx.allowHelp or ctx.allowHarm) then
             ok = false
 
             for _, name in pairs(needs) do
@@ -5030,25 +5033,26 @@ local function CheckAbilityConditions(data)
   end
 
   -- Cache target facts once per evaluation
-  local tf = _DA_GetTargetFacts()
+  ctx.tf = _DA_GetTargetFacts()
+  local tf = ctx.tf
 
   -- If nothing selected, do NOT gate on target at all.
   local ok = true
-  if allowHelp or allowHarm or allowSelf then
+  if ctx.allowHelp or ctx.allowHarm or ctx.allowSelf then
     ok = false
 
     -- Self: must be explicitly targeting player
-    if allowSelf and tf.exists and tf.isSelf then
+    if ctx.allowSelf and tf.exists and tf.isSelf then
       ok = true
     end
 
     -- Help: friendly target (EXCLUDING self), requires a target
-    if (not ok) and allowHelp and tf.exists and tf.isFriend and (not tf.isSelf) then
+    if (not ok) and ctx.allowHelp and tf.exists and tf.isFriend and (not tf.isSelf) then
       ok = true
     end
 
     -- Harm: hostile/attackable and not friendly, requires a target
-    if (not ok) and allowHarm and tf.exists and tf.canAttack and (not tf.isFriend) then
+    if (not ok) and ctx.allowHarm and tf.exists and tf.canAttack and (not tf.isFriend) then
       ok = true
     end
   end
@@ -5080,8 +5084,8 @@ local function CheckAbilityConditions(data)
 
   -- === Form / Stance requirement (if set)
   if show and c.form and c.form ~= "All" then
-    if _sgFormPass ~= nil then
-      if not _sgFormPass then
+    if _sg.form ~= nil then
+      if not _sg.form then
         show = false
       end
     else
@@ -5093,8 +5097,8 @@ local function CheckAbilityConditions(data)
 
   -- === Weapon filter (Two-Hand / Shield / Dual-Wield) ===
   if show and c.weaponFilter and c.weaponFilter ~= "" then
-    if _sgWeaponPass ~= nil then
-      if not _sgWeaponPass then
+    if _sg.weapon ~= nil then
+      if not _sg.weapon then
         show = false
       end
     else
@@ -5113,13 +5117,13 @@ local function CheckAbilityConditions(data)
       -- Gate by target kind if user also set targetHelp/targetHarm/targetSelf
       if tf.exists then
         -- Use already-computed allowHelp/allowHarm/allowSelf from above
-        if (allowHelp or allowHarm or allowSelf) then
+        if (ctx.allowHelp or ctx.allowHarm or ctx.allowSelf) then
           local okHP = true
-          if allowSelf then
+          if ctx.allowSelf then
             okHP = tf.isSelf
-          elseif allowHelp then
+          elseif ctx.allowHelp then
             okHP = tf.isFriend and (not tf.isSelf)
-          elseif allowHarm then
+          elseif ctx.allowHarm then
             okHP = tf.canAttack and (not tf.isFriend)
           end
 
@@ -5198,8 +5202,8 @@ local function CheckAbilityConditions(data)
 
   -- === Aura Conditions (extra ability gating) ===========================
   if show and c.auraConditions and table.getn(c.auraConditions) > 0 then
-    if _sgAuraPass ~= nil then
-      if not _sgAuraPass then
+    if _sg.aura ~= nil then
+      if not _sg.aura then
         show = false
       end
     else

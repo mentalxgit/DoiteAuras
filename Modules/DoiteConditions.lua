@@ -4875,22 +4875,20 @@ local function CheckAbilityConditions(data)
   end
 
   -- === 1. Cooldown / usability ===
-  local spellName = ctx.spellName
   local spellIndex = ctx.spellIndex
-  local bookType = BOOKTYPE_SPELL
   local onCdNow = false
 
   if not spellIndex then
     return false
   end
 
-  onCdNow = _IsSpellOnCooldown(spellIndex, bookType) and true or false
+  onCdNow = _IsSpellOnCooldown(spellIndex, BOOKTYPE_SPELL) and true or false
 
   if c.mode == "usable" and spellIndex then
     local _, cls = UnitClass("player");
     cls = cls and string.upper(cls) or ""
     -- === WARRIOR override for Overpower/Revenge ===
-    if cls == "WARRIOR" and (spellName == "Overpower" or spellName == "Revenge") then
+    if cls == "WARRIOR" and (ctx.spellName == "Overpower" or ctx.spellName == "Revenge") then
       if onCdNow then
         show = false
       else
@@ -4898,7 +4896,7 @@ local function CheckAbilityConditions(data)
         if rage < 5 then
           show = false
         else
-          if spellName == "Overpower" then
+          if ctx.spellName == "Overpower" then
             -- Require current target to be the dodger, window <= 5s
             show = _Warrior_Overpower_OK()
           else
@@ -4910,13 +4908,13 @@ local function CheckAbilityConditions(data)
       end
     else
       -- ===== Normal usable logic (all other classes/spells) =====
-      local usable, noMana = _SafeSpellUsable(spellName, spellIndex, bookType)
+      local usable, noMana = _SafeSpellUsable(ctx.spellName, spellIndex, BOOKTYPE_SPELL)
 
       if (usable ~= 1) or (noMana == 1) or onCdNow then
         show = false
       else
         -- === Usable special cases (guards) ===
-        if cls == "DRUID" and spellName == "Swiftmend" then
+        if cls == "DRUID" and ctx.spellName == "Swiftmend" then
           local needs = _DA_SWIFTMEND_NEEDS
           local ok = false
 
@@ -5073,7 +5071,7 @@ local function CheckAbilityConditions(data)
       if not DoiteConditions_PassesTargetStatus(c, unitForTarget) then
         show = false
         -- 2) Range filter (if configured)
-      elseif not DoiteConditions_PassesTargetDistance(c, unitForTarget, spellName) then
+      elseif not DoiteConditions_PassesTargetDistance(c, unitForTarget, ctx.spellName) then
         show = false
         -- 3) Unit-type filter (if configured)
       elseif not DoiteConditions_PassesTargetUnitType(c, unitForTarget) then
@@ -5189,7 +5187,7 @@ local function CheckAbilityConditions(data)
 
     local threshold = tonumber(c.remainingVal)
     if threshold then
-      local rem = _AbilityRemainingSeconds(spellIndex, bookType)
+      local rem = _AbilityRemainingSeconds(spellIndex, BOOKTYPE_SPELL)
 
       -- the real remaining cooldown for this spellbook entry.
       if rem and rem > 0 then

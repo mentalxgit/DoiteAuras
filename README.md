@@ -32,15 +32,7 @@ _Timestamps are available in the description._
 - `/da` or `/doite` or `/doiteauras`
 
 ## Shared exported builds (for inspiration or use)
-- Warrior - By Doite [All stances]: [**LINK**](https://ghostbin.axel.org/paste/oapsc)
-- Druid - By Doite [All forms]: [**LINK**](https://ghostbin.axel.org/paste/t4fma)
-- Paladin - By Bertholdt [Seal Tracker]: [**LINK**](https://ghostbin.axel.org/paste/hphwt)
-- Mage - By Cancel / Terms: [**LINK**](https://ghostbin.axel.org/paste/jpx46)
-- Shaman - by Minta [Elemental]: [**LINK**](https://ghostbin.axel.org/paste/dfypt)
-- Kara40 Boss Debuffs - By Doite: [**LINK**](https://ghostbin.axel.org/paste/w8mtr)
-- Melee consumes - By Doite: [**LINK**](https://ghostbin.axel.org/paste/3e6re)
-- Caster consumes - By Doite: [**LINK**](https://ghostbin.axel.org/paste/swm4h)
-- Healer consumes - By Doite: [**LINK**] - SOON
+- Reddit _DoiteAuras - Share your UI_: **[LINK](https://www.reddit.com/r/DoiteAuras/comments/1r8w4zf/doiteauras_share_your_ui/)**
 
 _To import - copy the text, press the import button inside DoiteAuras in-game and paste._
 

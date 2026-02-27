@@ -32,7 +32,7 @@ _Timestamps are available in the description._
 - `/da` or `/doite` or `/doiteauras`
 
 ## Shared exported builds (for inspiration or use)
-- Reddit _DoiteAuras - Share your UI_: **[LINK](https://www.reddit.com/r/DoiteAuras/comments/1r8w4zf/doiteauras_share_your_ui/)**
+- Reddit / DoiteAuras - Share your UI: **[LINK](https://www.reddit.com/r/DoiteAuras/comments/1r8w4zf/doiteauras_share_your_ui/)**
 
 _To import - copy the text, press the import button inside DoiteAuras in-game and paste._
 

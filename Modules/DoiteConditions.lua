@@ -5705,11 +5705,7 @@ local function CheckAuraConditions(data)
       if mineKnown then
         if ownerFilter == "mine" and not isMine then
           found = false
-        end
-      elseif ownerFilter == "others" then
-        -- For onlyOthers: if known, require explicit other.
-        -- If unknown, keep found=true so first-seen foreign auras are not hidden.
-        if mineKnown and (not isOther) then
+        elseif ownerFilter == "others" and not isOther then
           found = false
         end
       end

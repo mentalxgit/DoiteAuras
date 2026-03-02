@@ -2571,7 +2571,9 @@ local function _DoiteTrackRemainingPass(spellKey, unit, comp, threshold, useSpel
     return nil
   end
 
-  if DoiteTrack.RemainingPassesByName then
+  if useSpellId == true and DoiteTrack.RemainingPassesBySpellId then
+    return DoiteTrack:RemainingPassesBySpellId(spellKey, unit, comp, threshold)
+  elseif DoiteTrack.RemainingPassesByName then
     -- Add-on helper handles comparison internally
     return DoiteTrack:RemainingPassesByName(spellKey, unit, comp, threshold)
   end
@@ -5845,7 +5847,7 @@ local function CheckAuraConditions(data)
         local comp = c.remainingComp
         local pass = true
         if targetSelf then
-          local rem = _PlayerAuraRemainingSeconds(name)
+          local rem = _PlayerAuraRemainingSeconds(name, auraSpellId, useSpellIdOnly)
           if rem and rem > 0 then
             pass = _RemainingPasses(rem, comp, threshold)
           else
@@ -5853,7 +5855,7 @@ local function CheckAuraConditions(data)
           end
         else
           if ownerFilter == "mine" and DoiteTrack then
-            local rpass = _DoiteTrackRemainingPass(name, "target", comp, threshold)
+            local rpass = _DoiteTrackRemainingPass(useSpellIdOnly and auraSpellId or name, "target", comp, threshold, useSpellIdOnly)
             if rpass == nil then
               pass = false
             else
@@ -5890,7 +5892,7 @@ local function CheckAuraConditions(data)
         end
       end
       if unitToCheck then
-        local cnt = _GetAuraStacksOnUnit(unitToCheck, name, wantDebuff)
+        local cnt = _GetAuraStacksOnUnit(unitToCheck, name, wantDebuff, auraSpellId, useSpellIdOnly)
         if cnt and (not _StacksPasses(cnt, c.stacksComp, threshold)) then
           show = false
         end

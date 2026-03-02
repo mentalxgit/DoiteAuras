@@ -2486,6 +2486,28 @@ function DoiteTrack:RemainingPassesByName(spellName, unit, comp, threshold)
   return nil
 end
 
+
+function DoiteTrack:RemainingPassesBySpellId(spellId, unit, comp, threshold)
+  spellId = tonumber(spellId) or 0
+  if spellId <= 0 or not unit or not comp or threshold == nil then
+    return nil
+  end
+
+  local rem = self:GetAuraRemainingSecondsBySpellId(spellId, unit)
+  if not rem or rem <= 0 then
+    return nil
+  end
+
+  if comp == ">=" then
+    return rem >= threshold
+  elseif comp == "<=" then
+    return rem <= threshold
+  elseif comp == "==" then
+    return rem == threshold
+  end
+  return nil
+end
+
 function DoiteTrack:GetAuraOwnershipByName(spellName, unit)
   if not spellName or not unit then
     return nil, false, nil, false, false, false

@@ -1091,6 +1091,9 @@ local function _ScanPlayerItemInstances(data)
   local cacheKey = nil
   if expectedId then
     if data._daItemScanCacheKeyType ~= "id" or data._daItemScanCacheKeyId ~= expectedId then
+      if data._daItemScanCacheKey then
+        _ItemScanCache[data._daItemScanCacheKey] = nil
+      end
       data._daItemScanCacheKey = "id:" .. expectedId
       data._daItemScanCacheKeyType = "id"
       data._daItemScanCacheKeyId = expectedId
@@ -1099,6 +1102,9 @@ local function _ScanPlayerItemInstances(data)
     cacheKey = data._daItemScanCacheKey
   elseif expectedName and expectedName ~= "" then
     if data._daItemScanCacheKeyType ~= "name" or data._daItemScanCacheKeyName ~= expectedName then
+      if data._daItemScanCacheKey then
+        _ItemScanCache[data._daItemScanCacheKey] = nil
+      end
       data._daItemScanCacheKey = "name:" .. expectedName
       data._daItemScanCacheKeyType = "name"
       data._daItemScanCacheKeyName = expectedName
@@ -1106,6 +1112,9 @@ local function _ScanPlayerItemInstances(data)
     end
     cacheKey = data._daItemScanCacheKey
   else
+    if data._daItemScanCacheKey then
+      _ItemScanCache[data._daItemScanCacheKey] = nil
+    end
     data._daItemScanCacheKey = nil
     data._daItemScanCacheKeyType = nil
     data._daItemScanCacheKeyId = nil
@@ -1273,14 +1282,24 @@ local function _GetInventorySlotState(slot)
     dur = dur or 0
   end
 
-  -- Detect usable / "Use:"-style items via tooltip text. Cache per exact item link to avoid repeated string.lower() allocations.
+  -- Detect usable / "Use:"-style items via tooltip text.
+  -- Cache by itemId when possible (stable key, avoids link-variant key growth).
   local useCache = DoiteConditions._itemUseCache
   if not useCache then
     useCache = {}
     DoiteConditions._itemUseCache = useCache
+    DoiteConditions._itemUseCacheN = 0
   end
 
-  local isUse = useCache[link]
+  local cacheKey = nil
+  local _, _, idStr = str_find(link, "item:(%d+)")
+  if idStr then
+    cacheKey = tonumber(idStr)
+  else
+    cacheKey = link
+  end
+
+  local isUse = useCache[cacheKey]
   if isUse == nil then
     _EnsureTooltip()
     DoiteConditionsTooltip:ClearLines()
@@ -1305,7 +1324,15 @@ local function _GetInventorySlotState(slot)
       i = i + 1
     end
 
-    useCache[link] = isUse
+    useCache[cacheKey] = isUse
+
+    DoiteConditions._itemUseCacheN = (DoiteConditions._itemUseCacheN or 0) + 1
+    if DoiteConditions._itemUseCacheN > 256 then
+      for k in pairs(useCache) do
+        useCache[k] = nil
+      end
+      DoiteConditions._itemUseCacheN = 0
+    end
   end
 
   return true, onCd, rem, dur or 0, isUse

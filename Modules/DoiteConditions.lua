@@ -7962,11 +7962,11 @@ eventFrame:SetScript("OnEvent", function()
 
   elseif event == "BAG_UPDATE" then
     if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      if GetTime() >= (DoiteConditions._daLastBagInvalidateAt or 0) then
-        if _InvalidateItemScanCache then
-          _InvalidateItemScanCache()
-        end
-        DoiteConditions._daLastBagInvalidateAt = GetTime() + 0.10
+      -- Keep item whereabouts/counts exact when stacks split/merge or the last
+      -- item leaves a bag slot. Throttling this can miss the final state flip
+      -- (bag -> missing) and briefly hide/show wrong icon state.
+      if _InvalidateItemScanCache then
+        _InvalidateItemScanCache()
       end
       dirty_ability = true
     end

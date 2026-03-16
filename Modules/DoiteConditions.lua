@@ -1064,7 +1064,6 @@ end
 -- Scan player inventory + bags for the configured item
 local _ItemScanCache = {}
 local _ItemScanGen = 0
-local _ItemScanTTL = 0.50
 
 local function _InvalidateItemScanCache()
   _ItemScanGen = _ItemScanGen + 1
@@ -1099,8 +1098,7 @@ local function _ScanPlayerItemInstances(data)
   if cacheKey then
     local c = _ItemScanCache[cacheKey]
     if c then
-      local now = GetTime()
-      if (c.gen == _ItemScanGen) and c.t and ((now - c.t) < _ItemScanTTL) then
+      if (c.gen == _ItemScanGen) then
         return c.hasEquipped, c.hasBag, c.eqSlot, c.bagLoc, c.eqCount, c.bagCount
       end
     end
@@ -1198,7 +1196,6 @@ local function _ScanPlayerItemInstances(data)
     end
 
     c.gen = _ItemScanGen
-    c.t = GetTime()
     c.hasEquipped = hasEquipped
     c.hasBag = hasBag
     c.eqSlot = firstEquippedSlot

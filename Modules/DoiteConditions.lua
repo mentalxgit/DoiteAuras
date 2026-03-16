@@ -1132,12 +1132,18 @@ local function _ScanPlayerItemInstances(data)
   while slot <= 19 do
     local link = GetInventoryItemLink("player", slot)
     if link then
-      local id, name = _ParseItemLink(link)
+      local id, name = nil, nil
       local match = false
-      if expectedId and id then
-        match = (id == expectedId)
-      elseif expectedName and name then
-        match = (name == expectedName)
+      if expectedId then
+        _, _, id = str_find(link, "item:(%d+)")
+        if id then
+          match = (tonumber(id) == expectedId)
+        end
+      else
+        id, name = _ParseItemLink(link)
+        if expectedName and name then
+          match = (name == expectedName)
+        end
       end
       if match then
         hasEquipped = true
@@ -1168,12 +1174,18 @@ local function _ScanPlayerItemInstances(data)
       while bslot <= numSlots do
         local link = GetContainerItemLink(bag, bslot)
         if link then
-          local id, name = _ParseItemLink(link)
+          local id, name = nil, nil
           local match = false
-          if expectedId and id then
-            match = (id == expectedId)
-          elseif expectedName and name then
-            match = (name == expectedName)
+          if expectedId then
+            _, _, id = str_find(link, "item:(%d+)")
+            if id then
+              match = (tonumber(id) == expectedId)
+            end
+          else
+            id, name = _ParseItemLink(link)
+            if expectedName and name then
+              match = (name == expectedName)
+            end
           end
           if match then
             hasBag = true

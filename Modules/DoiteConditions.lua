@@ -4814,29 +4814,6 @@ end
 -- Global flags: do we have ANY icons that use targetDistance / targetUnitType?
 local _hasAnyTargetMods_Ability = false
 local _hasAnyTargetMods_Aura = false
-local _hasAnyItemLogic = false
-
-local function _RebuildItemUsageFlag()
-  _hasAnyItemLogic = false
-
-  if DoiteAurasDB and DoiteAurasDB.spells then
-    for _, data in pairs(DoiteAurasDB.spells) do
-      if type(data) == "table" and data.type == "Item" then
-        _hasAnyItemLogic = true
-        return
-      end
-    end
-  end
-
-  if DoiteDB and DoiteDB.icons then
-    for _, data in pairs(DoiteDB.icons) do
-      if type(data) == "table" and data.type == "Item" then
-        _hasAnyItemLogic = true
-        return
-      end
-    end
-  end
-end
 
 local function _IconHasTargetMods_AbilityOrItem(data)
   if not data or not data.conditions then
@@ -4868,11 +4845,17 @@ end
 local function _RebuildTargetModsFlags()
   _hasAnyTargetMods_Ability = false
   _hasAnyTargetMods_Aura = false
+  if DoiteConditions then
+    DoiteConditions._hasAnyItemLogic = false
+  end
 
   -- 1) Live icons
   if DoiteAurasDB and DoiteAurasDB.spells then
     for key, data in pairs(DoiteAurasDB.spells) do
       if type(data) == "table" and data.type then
+        if data.type == "Item" and DoiteConditions then
+          DoiteConditions._hasAnyItemLogic = true
+        end
         if (data.type == "Ability" or data.type == "Item")
             and _IconHasTargetMods_AbilityOrItem(data) then
           _hasAnyTargetMods_Ability = true
@@ -4892,6 +4875,9 @@ local function _RebuildTargetModsFlags()
   if DoiteDB and DoiteDB.icons then
     for key, data in pairs(DoiteDB.icons) do
       if type(data) == "table" and data.type then
+        if data.type == "Item" and DoiteConditions then
+          DoiteConditions._hasAnyItemLogic = true
+        end
         if (data.type == "Ability" or data.type == "Item")
             and _IconHasTargetMods_AbilityOrItem(data) then
           _hasAnyTargetMods_Ability = true
@@ -7126,9 +7112,6 @@ function DoiteConditions_RequestEvaluate()
   if _RebuildTargetModsFlags then
     _RebuildTargetModsFlags()
   end
-  if _RebuildItemUsageFlag then
-    _RebuildItemUsageFlag()
-  end
   dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
 end
 
@@ -7763,9 +7746,6 @@ eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 
-local _lastBagInvalidateAt = 0
-local _lastBagCooldownDirtyAt = 0
-
 eventFrame:SetScript("OnEvent", function()
   if event == "PLAYER_ENTERING_WORLD" then
     -- Initial aura scan
@@ -7792,9 +7772,6 @@ eventFrame:SetScript("OnEvent", function()
     end
     if _RebuildTargetModsFlags then
       _RebuildTargetModsFlags()
-    end
-    if _RebuildItemUsageFlag then
-      _RebuildItemUsageFlag()
     end
     if _RefreshPlayerMeleeThreshold then
       _RefreshPlayerMeleeThreshold()
@@ -7868,7 +7845,7 @@ eventFrame:SetScript("OnEvent", function()
     dirty_ability, dirty_aura = true, true
 
   elseif event == "PLAYER_EQUIPMENT_CHANGED" then
-    if _hasAnyItemLogic then
+    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
       if _G.DoiteConditions_ClearTrinketFirstMemory then
         _G.DoiteConditions_ClearTrinketFirstMemory()
       end
@@ -7880,28 +7857,26 @@ eventFrame:SetScript("OnEvent", function()
     end
 
   elseif event == "BAG_UPDATE_COOLDOWN" then
-    if _hasAnyItemLogic then
-      local now = GetTime()
-      if now >= _lastBagCooldownDirtyAt then
+    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+      if GetTime() >= (DoiteConditions._daLastBagCooldownDirtyAt or 0) then
         dirty_ability = true
-        _lastBagCooldownDirtyAt = now + 0.10
+        DoiteConditions._daLastBagCooldownDirtyAt = GetTime() + 0.10
       end
     end
 
   elseif event == "BAG_UPDATE" then
-    if _hasAnyItemLogic then
-      local now = GetTime()
-      if (now - _lastBagInvalidateAt) >= 0.10 then
+    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+      if GetTime() >= (DoiteConditions._daLastBagInvalidateAt or 0) then
         if _InvalidateItemScanCache then
           _InvalidateItemScanCache()
         end
-        _lastBagInvalidateAt = now
+        DoiteConditions._daLastBagInvalidateAt = GetTime() + 0.10
       end
       dirty_ability = true
     end
 
   elseif event == "UNIT_INVENTORY_CHANGED" then
-    if arg1 == "player" and _hasAnyItemLogic then
+    if arg1 == "player" and DoiteConditions and DoiteConditions._hasAnyItemLogic then
       if _InvalidateItemScanCache then
         _InvalidateItemScanCache()
       end

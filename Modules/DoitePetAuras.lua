@@ -10,6 +10,11 @@ local DoitePetAuras = {
   debuffs = {},
   buffIds = {},
   debuffIds = {},
+  buffNameToId = {},
+  debuffNameToId = {},
+  buffExpiresAt = {},
+  debuffExpiresAt = {},
+  spellDurationCache = {},
   petGuid = nil,
   initialized = false
 }
@@ -20,6 +25,16 @@ local function _ClearMap(t)
   for k in pairs(t) do
     t[k] = nil
   end
+end
+
+local function _NormalizeDurationSeconds(duration)
+  if not duration or duration <= 0 then
+    return nil
+  end
+  if duration > 100 then
+    return duration / 1000
+  end
+  return duration
 end
 
 local function _GetSpellNameById(spellId)
@@ -44,13 +59,84 @@ local function _GetSpellNameById(spellId)
   return nil
 end
 
+local function _GetDurationSecondsBySpellId(spellId)
+  local sid = tonumber(spellId) or 0
+  if sid <= 0 then
+    return nil
+  end
+
+  local cached = DoitePetAuras.spellDurationCache[sid]
+  if cached ~= nil then
+    return cached or nil
+  end
+
+  local duration = nil
+  if GetSpellDuration then
+    duration = _NormalizeDurationSeconds(GetSpellDuration(sid))
+  end
+
+  DoitePetAuras.spellDurationCache[sid] = duration or false
+  return duration
+end
+
+local function _UpdateExpiresBySpellId(spellId, stacks, wantDebuff, treatAsFreshApply)
+  local sid = tonumber(spellId) or 0
+  if sid <= 0 then
+    return
+  end
+
+  local expiresMap = wantDebuff and DoitePetAuras.debuffExpiresAt or DoitePetAuras.buffExpiresAt
+
+  if not stacks or stacks <= 0 then
+    expiresMap[sid] = nil
+    return
+  end
+
+  local duration = _GetDurationSecondsBySpellId(sid)
+  if not duration then
+    expiresMap[sid] = nil
+    return
+  end
+
+  local now = GetTime and GetTime() or 0
+  local current = expiresMap[sid]
+  if treatAsFreshApply == true or not current or current <= now then
+    expiresMap[sid] = now + duration
+  end
+end
+
+local function _GetRemainingFromExpiresMap(expiresMap, spellId)
+  local sid = tonumber(spellId) or 0
+  if sid <= 0 then
+    return nil
+  end
+
+  local expiresAt = expiresMap[sid]
+  if not expiresAt then
+    return nil
+  end
+
+  local now = GetTime and GetTime() or 0
+  local rem = expiresAt - now
+  if rem <= 0 then
+    expiresMap[sid] = nil
+    return nil
+  end
+
+  return rem
+end
+
 local function _ScanPetAuras()
   _ClearMap(DoitePetAuras.buffs)
   _ClearMap(DoitePetAuras.debuffs)
   _ClearMap(DoitePetAuras.buffIds)
   _ClearMap(DoitePetAuras.debuffIds)
+  _ClearMap(DoitePetAuras.buffNameToId)
+  _ClearMap(DoitePetAuras.debuffNameToId)
 
   if not UnitExists("pet") then
+    _ClearMap(DoitePetAuras.buffExpiresAt)
+    _ClearMap(DoitePetAuras.debuffExpiresAt)
     return
   end
 
@@ -62,10 +148,14 @@ local function _ScanPetAuras()
     end
 
     if spellId then
-      DoitePetAuras.buffIds[spellId] = stacks or 1
-      local name = _GetSpellNameById(spellId)
+      local sid = tonumber(spellId) or 0
+      local stackVal = stacks or 1
+      DoitePetAuras.buffIds[sid] = stackVal
+      _UpdateExpiresBySpellId(sid, stackVal, false, false)
+      local name = _GetSpellNameById(sid)
       if name then
-        DoitePetAuras.buffs[name] = stacks or 1
+        DoitePetAuras.buffs[name] = stackVal
+        DoitePetAuras.buffNameToId[name] = sid
       end
     end
 
@@ -80,10 +170,14 @@ local function _ScanPetAuras()
     end
 
     if spellId then
-      DoitePetAuras.debuffIds[spellId] = stacks or 1
-      local name = _GetSpellNameById(spellId)
+      local sid = tonumber(spellId) or 0
+      local stackVal = stacks or 1
+      DoitePetAuras.debuffIds[sid] = stackVal
+      _UpdateExpiresBySpellId(sid, stackVal, true, false)
+      local name = _GetSpellNameById(sid)
       if name then
-        DoitePetAuras.debuffs[name] = stacks or 1
+        DoitePetAuras.debuffs[name] = stackVal
+        DoitePetAuras.debuffNameToId[name] = sid
       end
     end
 
@@ -99,6 +193,7 @@ local function _SetAuraBySpellId(spellId, stacks, wantDebuff)
 
   local byId = wantDebuff and DoitePetAuras.debuffIds or DoitePetAuras.buffIds
   local byName = wantDebuff and DoitePetAuras.debuffs or DoitePetAuras.buffs
+  local byNameToId = wantDebuff and DoitePetAuras.debuffNameToId or DoitePetAuras.buffNameToId
 
   if stacks and stacks > 0 then
     byId[sid] = stacks
@@ -110,14 +205,20 @@ local function _SetAuraBySpellId(spellId, stacks, wantDebuff)
   if name then
     if stacks and stacks > 0 then
       byName[name] = stacks
+      byNameToId[name] = sid
     else
       byName[name] = nil
+      byNameToId[name] = nil
     end
   end
+
+  _UpdateExpiresBySpellId(sid, stacks, wantDebuff, true)
 end
 
 local function _ResetForPetChange()
   DoitePetAuras.petGuid = GetUnitGUID and GetUnitGUID("pet") or nil
+  _ClearMap(DoitePetAuras.buffExpiresAt)
+  _ClearMap(DoitePetAuras.debuffExpiresAt)
   _ScanPetAuras()
 end
 
@@ -194,23 +295,41 @@ function DoitePetAuras.GetStacks(auraName, wantDebuff, auraSpellId, useSpellIdOn
 end
 
 function DoitePetAuras.GetAuraRemainingSeconds(auraName, auraSpellId, useSpellIdOnly)
-  if not DoiteTrack then
+  if not DoitePetAuras.CanTrack() then
     return nil
   end
 
   if useSpellIdOnly == true then
-    if DoiteTrack.GetAuraRemainingSecondsBySpellId then
-      local rem = DoiteTrack:GetAuraRemainingSecondsBySpellId(auraSpellId, "pet")
-      if rem and rem > 0 then
-        return rem
-      end
+    local sid = tonumber(auraSpellId) or 0
+    if sid <= 0 then
+      return nil
     end
-  else
-    if DoiteTrack.GetAuraRemainingSecondsByName then
-      local rem2 = DoiteTrack:GetAuraRemainingSecondsByName(auraName, "pet")
-      if rem2 and rem2 > 0 then
-        return rem2
-      end
+
+    local remBuff = _GetRemainingFromExpiresMap(DoitePetAuras.buffExpiresAt, sid)
+    if remBuff then
+      return remBuff
+    end
+
+    return _GetRemainingFromExpiresMap(DoitePetAuras.debuffExpiresAt, sid)
+  end
+
+  if not auraName or auraName == "" then
+    return nil
+  end
+
+  local buffSid = DoitePetAuras.buffNameToId[auraName]
+  if buffSid then
+    local remBuffByName = _GetRemainingFromExpiresMap(DoitePetAuras.buffExpiresAt, buffSid)
+    if remBuffByName then
+      return remBuffByName
+    end
+  end
+
+  local debuffSid = DoitePetAuras.debuffNameToId[auraName]
+  if debuffSid then
+    local remDebuffByName = _GetRemainingFromExpiresMap(DoitePetAuras.debuffExpiresAt, debuffSid)
+    if remDebuffByName then
+      return remDebuffByName
     end
   end
 
@@ -273,6 +392,10 @@ f:SetScript("OnEvent", function()
       _ClearMap(DoitePetAuras.debuffs)
       _ClearMap(DoitePetAuras.buffIds)
       _ClearMap(DoitePetAuras.debuffIds)
+      _ClearMap(DoitePetAuras.buffNameToId)
+      _ClearMap(DoitePetAuras.debuffNameToId)
+      _ClearMap(DoitePetAuras.buffExpiresAt)
+      _ClearMap(DoitePetAuras.debuffExpiresAt)
       needsEval = true
     end
   elseif evt == "PLAYER_DEAD" then
@@ -281,6 +404,10 @@ f:SetScript("OnEvent", function()
     _ClearMap(DoitePetAuras.debuffs)
     _ClearMap(DoitePetAuras.buffIds)
     _ClearMap(DoitePetAuras.debuffIds)
+    _ClearMap(DoitePetAuras.buffNameToId)
+    _ClearMap(DoitePetAuras.debuffNameToId)
+    _ClearMap(DoitePetAuras.buffExpiresAt)
+    _ClearMap(DoitePetAuras.debuffExpiresAt)
     needsEval = true
   end
 

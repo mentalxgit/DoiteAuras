@@ -2891,6 +2891,59 @@ local function _AuraConditions_CheckEntry(entry)
     end
   end
 
+  -- ITEM CONDITION BRANCH (In bag/equipped or Missing + On/Off CD + Quantity)
+  if entry.buffType == "ITEM" then
+    local dataTmp = DoiteConditions._auraCondItemDataTmp
+    if not dataTmp then
+      dataTmp = {}
+      DoiteConditions._auraCondItemDataTmp = dataTmp
+    end
+
+    dataTmp.name = name
+    dataTmp.displayName = name
+    dataTmp.itemName = name
+    dataTmp.itemId = nil
+    dataTmp.itemID = nil
+
+    local cTmp = DoiteConditions._auraCondItemCondTmp
+    if not cTmp then
+      cTmp = {}
+      DoiteConditions._auraCondItemCondTmp = cTmp
+    end
+
+    cTmp.whereEquipped = (entry.mode ~= "missing") and true or nil
+    cTmp.whereBag = (entry.mode ~= "missing") and true or nil
+    cTmp.whereMissing = (entry.mode == "missing") and true or nil
+    cTmp.inventorySlot = nil
+    cTmp.mode = (entry.unit == "oncd") and "oncd" or "notcd"
+
+    local stacksEnabled = (entry.stacksEnabled == true) and (entry.mode ~= "missing")
+    cTmp.stacksEnabled = stacksEnabled and true or nil
+    cTmp.stacksComp = entry.stacksComp
+    cTmp.stacksVal = entry.stacksVal
+
+    local state = _EvaluateItemCoreState(dataTmp, cTmp)
+
+    if entry.mode == "missing" then
+      return state and state.isMissing and true or false
+    end
+
+    if not (state and state.hasItem and state.passesWhere and state.modeMatches) then
+      return false
+    end
+
+    if stacksEnabled then
+      local comp = cTmp.stacksComp
+      local thr = tonumber(cTmp.stacksVal)
+      if comp and thr then
+        local cnt = state.effectiveCount or 0
+        return _StacksPasses(cnt, comp, thr)
+      end
+    end
+
+    return true
+  end
+
   -- Cache TALENT mode normalization by raw string to avoid per-eval lower/gsub allocations
   local _DA_TalentModeKeyByRaw = _DA_TalentModeKeyByRaw or {}
 

@@ -5808,6 +5808,65 @@ do
     end
   end
 
+  local function AuraCond_BuildItemOptions()
+    local items, seen = {}, {}
+    local function _Add(name)
+      if not name or name == "" or seen[name] then return end
+      seen[name] = true
+      table.insert(items, name)
+    end
+    local function _NameFromLink(link)
+      if not link or link == "" then return nil end
+      local nm = GetItemInfo and GetItemInfo(link)
+      if nm and nm ~= "" then return nm end
+      local _, _, txt = string.find(link, "%[(.-)%]")
+      return txt
+    end
+    local i
+    for _, i in ipairs({13,14,16,17,18}) do
+      _Add(_NameFromLink(GetInventoryItemLink and GetInventoryItemLink("player", i)))
+    end
+    local bag, slot
+    for bag = 0, 4 do
+      local n = GetContainerNumSlots and GetContainerNumSlots(bag)
+      if n and n > 0 then
+        for slot = 1, n do
+          _Add(_NameFromLink(GetContainerItemLink and GetContainerItemLink(bag, slot)))
+        end
+      end
+    end
+    table.sort(items, function(a, b)
+      return string.lower(a or "") < string.lower(b or "")
+    end)
+    table.insert(items, 1, "---EQUIPPED WEAPON SLOTS---")
+    table.insert(items, 1, "---EQUIPPED TRINKET SLOTS---")
+    return items
+  end
+
+  local function AuraCond_InitItemDropdown(row)
+    if not row or not row.itemDD then return end
+    row._itemOptions = AuraCond_BuildItemOptions()
+    UIDropDownMenu_Initialize(row.itemDD, function()
+      local i, info
+      for i = 1, table.getn(row._itemOptions) do
+        info = {}
+        info.text = row._itemOptions[i]
+        info.value = row._itemOptions[i]
+        local picked = info.value
+        info.func = function(button)
+          local val = (button and button.value) or picked
+          row._itemName = val
+          if UIDropDownMenu_SetText then pcall(UIDropDownMenu_SetText, val, row.itemDD) end
+          if _GoldifyDD then _GoldifyDD(row.itemDD) end
+        end
+        info.checked = (row._itemName == info.value)
+        UIDropDownMenu_AddButton(info)
+      end
+    end)
+    if UIDropDownMenu_SetText then pcall(UIDropDownMenu_SetText, row._itemName or "Select item", row.itemDD) end
+    if _GoldifyDD then _GoldifyDD(row.itemDD) end
+  end
+
   local function AuraCond_BuildDescription(buffType, mode, unit, name, stacksEnabled, stacksComp, stacksVal)
     local niceName = AuraCond_TitleCase(name or "")
   
@@ -5850,6 +5909,14 @@ do
       local namePart = white .. (niceName or "") .. "|r"
   
       return talentPart .. " " .. sep .. statePart .. ": " .. namePart
+    elseif buffType == "ITEM" then
+      local whereWord = (mode == "missing") and "Missing" or "In bag/equipped"
+      local cdWord = (unit == "oncd") and "On CD" or "Not on CD"
+      local itemPart = yellow .. "Item" .. "|r"
+      local wherePart = yellow .. whereWord .. "|r"
+      local cdPart = yellow .. cdWord .. "|r"
+      local namePart = white .. (niceName or "") .. "|r"
+      return itemPart .. " " .. sep .. wherePart .. " " .. sep .. cdPart .. ": " .. namePart
     end
   
     -- Default: Buff / Debuff aura rows
@@ -5955,12 +6022,14 @@ do
     row.btn1:Hide()
     row.btn2:Hide()
     if row.btn3 then row.btn3:Hide() end
+    if row.btn4 then row.btn4:Hide() end
     row.closeBtn:Show()
     row.okBtn:Hide()
     row.editBox:Hide()
     row.addButton:Hide()
     row.labelFS:Hide()
     if row.abilityDD then row.abilityDD:Hide() end
+    if row.itemDD then row.itemDD:Hide() end
   
     if row.stacksLabel then row.stacksLabel:Hide() end
     if row.stacksCB then row.stacksCB:Hide() end
@@ -5978,34 +6047,39 @@ do
     if state == "STEP1" then
       row._branch = nil
   
-      local available = parentWidth - closeWidth - spacing * 5
+      local available = parentWidth - closeWidth - spacing * 6
       if available < 80 then available = 80 end
-      local w = math.floor(available / 4)
+      local w = math.floor(available / 5)
   
       row.btn1:SetWidth(w)
       row.btn2:SetWidth(w)
       row.addButton:SetWidth(w)
       if row.btn3 then row.btn3:SetWidth(w) end
+      if row.btn4 then row.btn4:SetWidth(w) end
     
       row.btn1:ClearAllPoints()
       row.btn2:ClearAllPoints()
       row.addButton:ClearAllPoints()
       if row.btn3 then row.btn3:ClearAllPoints() end
+      if row.btn4 then row.btn4:ClearAllPoints() end
   
       row.btn1:SetPoint("LEFT", row, "LEFT", 0, 0)
       row.btn2:SetPoint("LEFT", row.btn1, "RIGHT", spacing, 0)
       row.addButton:SetPoint("LEFT", row.btn2, "RIGHT", spacing, 0)
       if row.btn3 then row.btn3:SetPoint("LEFT", row.addButton, "RIGHT", spacing, 0) end
+      if row.btn4 then row.btn4:SetPoint("LEFT", row.btn3, "RIGHT", spacing, 0) end
   
       row.btn1:SetText("Ability")
       row.btn2:SetText("Buff")
       row.addButton:SetText("Debuff")
       if row.btn3 then row.btn3:SetText("Talent") end
+      if row.btn4 then row.btn4:SetText("Item") end
   
       row.btn1:Show()
       row.btn2:Show()
       row.addButton:Show()
       if row.btn3 then row.btn3:Show() end
+      if row.btn4 then row.btn4:Show() end
   
     elseif state == "STEP2" then
       local available = parentWidth - closeWidth - spacing * 3
@@ -6023,6 +6097,9 @@ do
       if row._branch == "ABILITY" then
         row.btn1:SetText("Not on CD")
         row.btn2:SetText("On CD")
+      elseif row._branch == "ITEM" then
+        row.btn1:SetText("In bag/equipped")
+        row.btn2:SetText("Missing")
       elseif row._branch == "TALENT" then
         row.btn1:SetText("Known")
         row.btn2:SetText("Not known")
@@ -6047,8 +6124,13 @@ do
       row.btn1:SetPoint("LEFT", row, "LEFT", 0, 0)
       row.btn2:SetPoint("LEFT", row.btn1, "RIGHT", spacing, 0)
   
-      row.btn1:SetText("On player")
-      row.btn2:SetText("On target")
+      if row._branch == "ITEM" then
+        row.btn1:SetText("Not on CD")
+        row.btn2:SetText("On CD")
+      else
+        row.btn1:SetText("On player")
+        row.btn2:SetText("On target")
+      end
       row.btn1:Show()
       row.btn2:Show()
   
@@ -6066,6 +6148,7 @@ do
       if row.stacksLabel then
         row.stacksLabel:ClearAllPoints()
         row.stacksLabel:SetPoint("LEFT", row, "LEFT", 0, 0)
+        if row._branch == "ITEM" then row.stacksLabel:SetText("Quantity?") else row.stacksLabel:SetText("Stacks?") end
         row.stacksLabel:Show()
       end
       if row.stacksCB then
@@ -6100,6 +6183,7 @@ do
       row.editBox:ClearAllPoints()
       row.addButton:ClearAllPoints()
       if row.abilityDD then row.abilityDD:ClearAllPoints() end
+      if row.itemDD then row.itemDD:ClearAllPoints() end
   
       row.editBox:SetWidth(editWidth)
       row.editBox:SetPoint("LEFT", row, "LEFT", 10, 0)
@@ -6116,6 +6200,17 @@ do
           end
           AuraCond_InitAbilityDropdown(row)
           row.abilityDD:Show()
+        end
+        row.addButton:Show()
+      elseif row._branch == "ITEM" then
+        if row.itemDD then
+          row.editBox:Hide()
+          row.itemDD:SetPoint("LEFT", row, "LEFT", -15, -3)
+          if UIDropDownMenu_SetWidth then
+            pcall(UIDropDownMenu_SetWidth, editWidth, row.itemDD)
+          end
+          AuraCond_InitItemDropdown(row)
+          row.itemDD:Show()
         end
         row.addButton:Show()
       else
@@ -6136,6 +6231,8 @@ do
     row._choiceMode = nil
     row._choiceUnit = nil
     row._spellName = nil
+    row._itemName = nil
+    row._choiceItemCd = nil
     row._abilityPage = 1
   
     -- stacks reset
@@ -6202,6 +6299,8 @@ do
       row._choiceMode = (entry and entry.mode) or "found"
       row._choiceUnit = (entry and entry.unit) or "player"
       row._spellName = (entry and entry.name) or ""
+	  row._itemName = (entry and entry.name) or ""
+	  row._choiceItemCd = (entry and entry.unit) or "notcd"
 	  row._stacksEnabled = (entry and entry.stacksEnabled) and true or nil
 	  row._stacksComp    = (entry and entry.stacksComp) or nil
 	  row._stacksVal     = (entry and entry.stacksVal) or nil
@@ -6292,6 +6391,8 @@ do
     local text
     if row._branch == "ABILITY" then
       text = row._spellName or ""
+    elseif row._branch == "ITEM" then
+      text = row._itemName or ""
     else
       text = row.editBox and row.editBox:GetText() or ""
     end
@@ -6307,6 +6408,9 @@ do
     if row._branch == "ABILITY" then
       unit = nil
       buffType = "ABILITY"
+    elseif row._branch == "ITEM" then
+      unit = row._choiceItemCd or "notcd"
+      buffType = "ITEM"
     elseif row._branch == "TALENT" then
       -- Talent rows have no unit field; keep buffType = "TALENT"
       unit = nil
@@ -6442,6 +6546,7 @@ do
     row.btn1 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.btn2 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.btn3 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.btn4 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.closeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.editBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
     row.addButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
@@ -6449,6 +6554,7 @@ do
 
     local ddName = "DoiteAuraCond_AbilityDD_" .. tostring(mgr.typeKey or "X") .. "_" .. tostring(AuraCond_RowCounter)
     row.abilityDD = CreateFrame("Frame", ddName, row, "UIDropDownMenuTemplate")
+    row.itemDD = CreateFrame("Frame", "DoiteAuraCond_ItemDD_" .. tostring(mgr.typeKey or "X") .. "_" .. tostring(AuraCond_RowCounter), row, "UIDropDownMenuTemplate")
 	
 	-- ✓ button (between content and X) used in STACKS stage
 	row.okBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
@@ -6485,9 +6591,11 @@ do
     row.btn1:SetWidth(mainWidth)
     row.btn2:SetWidth(mainWidth)
     row.btn3:SetWidth(mainWidth)
+    row.btn4:SetWidth(mainWidth)
     row.btn1:SetHeight(18)
     row.btn2:SetHeight(18)
     row.btn3:SetHeight(18)
+    row.btn4:SetHeight(18)
 
     row.closeBtn:SetWidth(closeWidth)
     row.closeBtn:SetHeight(18)
@@ -6530,6 +6638,7 @@ do
     DoiteEdit_YellowifyButton(row.btn1)
     DoiteEdit_YellowifyButton(row.btn2)
     DoiteEdit_YellowifyButton(row.btn3)
+    DoiteEdit_YellowifyButton(row.btn4)
     DoiteEdit_YellowifyButton(row.addButton)
     DoiteEdit_YellowifyButton(row.closeBtn)
 	DoiteEdit_YellowifyButton(row.okBtn)
@@ -6555,6 +6664,10 @@ do
           row._choiceMode = "notcd"
           AuraCond_SetRowState(row, "INPUT")
 
+        elseif row._branch == "ITEM" then
+          row._choiceMode = "found"
+          AuraCond_SetRowState(row, "STEP3")
+
         elseif row._branch == "TALENT" then
           -- Talent: Known
           row._choiceMode = "Known"
@@ -6567,6 +6680,15 @@ do
         end
 
 	  elseif state == "STEP3" then
+		if row._branch == "ITEM" then
+		  row._choiceItemCd = "notcd"
+		  if row._choiceMode == "missing" then
+		    AuraCond_SetRowState(row, "INPUT")
+		  else
+		    AuraCond_SetRowState(row, "STACKS")
+		  end
+		  return
+		end
 		-- Aura: On player
 		row._choiceUnit = "player"
 
@@ -6598,6 +6720,13 @@ do
           -- Ability: On cooldown
           row._choiceMode = "oncd"
           AuraCond_SetRowState(row, "INPUT")
+
+        elseif row._branch == "ITEM" then
+          row._choiceMode = "missing"
+          row._stacksEnabled = nil
+          row._stacksComp = nil
+          row._stacksVal  = nil
+          AuraCond_SetRowState(row, "STEP3")
 
         elseif row._branch == "TALENT" then
           -- Talent: Not known
@@ -6631,6 +6760,15 @@ do
         end
 
 	  elseif state == "STEP3" then
+		if row._branch == "ITEM" then
+		  row._choiceItemCd = "oncd"
+		  if row._choiceMode == "missing" then
+		    AuraCond_SetRowState(row, "INPUT")
+		  else
+		    AuraCond_SetRowState(row, "STACKS")
+		  end
+		  return
+		end
 		-- Aura: On target
 		row._choiceUnit = "target"
 
@@ -6655,6 +6793,20 @@ do
         row._choiceBuffType = "TALENT"
         row._choiceMode = nil
         row._choiceUnit = nil
+        AuraCond_SetRowState(row, "STEP2")
+      end
+    end)
+
+    row.btn4:SetScript("OnClick", function()
+      if not currentKey then
+        return
+      end
+      if row._state == "STEP1" then
+        row._branch = "ITEM"
+        row._choiceBuffType = "ITEM"
+        row._choiceMode = nil
+        row._choiceUnit = nil
+        row._choiceItemCd = nil
         AuraCond_SetRowState(row, "STEP2")
       end
     end)
@@ -6919,6 +7071,65 @@ do
     return string.sub(string.gsub(" " .. str, "%W%l", string.upper), 2)
   end
 
+  local function VfxCond_BuildItemOptions()
+    local items, seen = {}, {}
+    local function _Add(name)
+      if not name or name == "" or seen[name] then return end
+      seen[name] = true
+      table.insert(items, name)
+    end
+    local function _NameFromLink(link)
+      if not link or link == "" then return nil end
+      local nm = GetItemInfo and GetItemInfo(link)
+      if nm and nm ~= "" then return nm end
+      local _, _, txt = string.find(link, "%[(.-)%]")
+      return txt
+    end
+    local i
+    for _, i in ipairs({13,14,16,17,18}) do
+      _Add(_NameFromLink(GetInventoryItemLink and GetInventoryItemLink("player", i)))
+    end
+    local bag, slot
+    for bag = 0, 4 do
+      local n = GetContainerNumSlots and GetContainerNumSlots(bag)
+      if n and n > 0 then
+        for slot = 1, n do
+          _Add(_NameFromLink(GetContainerItemLink and GetContainerItemLink(bag, slot)))
+        end
+      end
+    end
+    table.sort(items, function(a, b)
+      return string.lower(a or "") < string.lower(b or "")
+    end)
+    table.insert(items, 1, "---EQUIPPED WEAPON SLOTS---")
+    table.insert(items, 1, "---EQUIPPED TRINKET SLOTS---")
+    return items
+  end
+
+  local function VfxCond_InitItemDropdown(row)
+    if not row or not row.itemDD then return end
+    row._itemOptions = VfxCond_BuildItemOptions()
+    UIDropDownMenu_Initialize(row.itemDD, function()
+      local i, info
+      for i = 1, table.getn(row._itemOptions) do
+        info = {}
+        info.text = row._itemOptions[i]
+        info.value = row._itemOptions[i]
+        local picked = info.value
+        info.func = function(button)
+          local val = (button and button.value) or picked
+          row._itemName = val
+          if UIDropDownMenu_SetText then pcall(UIDropDownMenu_SetText, val, row.itemDD) end
+          if _GoldifyDD then _GoldifyDD(row.itemDD) end
+        end
+        info.checked = (row._itemName == info.value)
+        UIDropDownMenu_AddButton(info)
+      end
+    end)
+    if UIDropDownMenu_SetText then pcall(UIDropDownMenu_SetText, row._itemName or "Select item", row.itemDD) end
+    if _GoldifyDD then _GoldifyDD(row.itemDD) end
+  end
+
   local function VfxCond_BuildDescription(buffType, mode, unit, name, stacksEnabled, stacksComp, stacksVal)
     local niceName = VfxCond_TitleCase(name or "")
   
@@ -6956,6 +7167,14 @@ do
       local talentPart = yellow .. "Talent" .. "|r"
       local namePart   = white .. (niceName or "") .. "|r"
       return talentPart .. " " .. sep .. statePart .. ": " .. namePart
+    elseif bt == "ITEM" then
+      local whereWord = (m == "missing") and "Missing" or "In bag/equipped"
+      local cdWord = (u == "oncd") and "On CD" or "Not on CD"
+      local itemPart = yellow .. "Item" .. "|r"
+      local wherePart = yellow .. whereWord .. "|r"
+      local cdPart = yellow .. cdWord .. "|r"
+      local namePart = white .. (niceName or "") .. "|r"
+      return itemPart .. " " .. sep .. wherePart .. " " .. sep .. cdPart .. ": " .. namePart
     end
   
     -- Default: Buff / Debuff aura rows
@@ -7226,12 +7445,14 @@ do
     row.btn1:Hide()
     row.btn2:Hide()
     if row.btn3 then row.btn3:Hide() end
+    if row.btn4 then row.btn4:Hide() end
     row.closeBtn:Show()
     if row.okBtn then row.okBtn:Hide() end
     row.editBox:Hide()
     row.addButton:Hide()
     row.labelFS:Hide()
     if row.abilityDD then row.abilityDD:Hide() end
+    if row.itemDD then row.itemDD:Hide() end
     if row.glowCB then row.glowCB:Hide() end
     if row.greyCB then row.greyCB:Hide() end
     if row.fadeCB then row.fadeCB:Hide() end
@@ -7250,34 +7471,39 @@ do
   
     if state == "STEP1" then
       row._branch = nil
-      local available = parentWidth - closeWidth - spacing * 5
+      local available = parentWidth - closeWidth - spacing * 6
       if available < 80 then available = 80 end
-      local w = math.floor(available / 4)
+      local w = math.floor(available / 5)
   
       row.btn1:SetWidth(w)
       row.btn2:SetWidth(w)
       row.addButton:SetWidth(w)
       if row.btn3 then row.btn3:SetWidth(w) end
+      if row.btn4 then row.btn4:SetWidth(w) end
   
       row.btn1:ClearAllPoints()
       row.btn2:ClearAllPoints()
       row.addButton:ClearAllPoints()
       if row.btn3 then row.btn3:ClearAllPoints() end
+      if row.btn4 then row.btn4:ClearAllPoints() end
   
       row.btn1:SetPoint("LEFT", row, "LEFT", 0, 0)
       row.btn2:SetPoint("LEFT", row.btn1, "RIGHT", spacing, 0)
       row.addButton:SetPoint("LEFT", row.btn2, "RIGHT", spacing, 0)
       if row.btn3 then row.btn3:SetPoint("LEFT", row.addButton, "RIGHT", spacing, 0) end
+      if row.btn4 then row.btn4:SetPoint("LEFT", row.btn3, "RIGHT", spacing, 0) end
   
       row.btn1:SetText("Ability")
       row.btn2:SetText("Buff")
       row.addButton:SetText("Debuff")
       if row.btn3 then row.btn3:SetText("Talent") end
+      if row.btn4 then row.btn4:SetText("Item") end
   
       row.btn1:Show()
       row.btn2:Show()
       row.addButton:Show()
       if row.btn3 then row.btn3:Show() end
+      if row.btn4 then row.btn4:Show() end
   
     elseif state == "STEP2" then
       local available = parentWidth - closeWidth - spacing * 3
@@ -7295,6 +7521,9 @@ do
       if row._branch == "ABILITY" then
         row.btn1:SetText("Not on CD")
         row.btn2:SetText("On CD")
+      elseif row._branch == "ITEM" then
+        row.btn1:SetText("In bag/equipped")
+        row.btn2:SetText("Missing")
       elseif row._branch == "TALENT" then
         row.btn1:SetText("Known")
         row.btn2:SetText("Not known")
@@ -7319,8 +7548,13 @@ do
       row.btn1:SetPoint("LEFT", row, "LEFT", 0, 0)
       row.btn2:SetPoint("LEFT", row.btn1, "RIGHT", spacing, 0)
   
-      row.btn1:SetText("On player")
-      row.btn2:SetText("On target")
+      if row._branch == "ITEM" then
+        row.btn1:SetText("Not on CD")
+        row.btn2:SetText("On CD")
+      else
+        row.btn1:SetText("On player")
+        row.btn2:SetText("On target")
+      end
       row.btn1:Show()
       row.btn2:Show()
   
@@ -7339,6 +7573,7 @@ do
       if row.stacksLabel then
         row.stacksLabel:ClearAllPoints()
         row.stacksLabel:SetPoint("LEFT", row, "LEFT", 0, 0)
+        if row._branch == "ITEM" then row.stacksLabel:SetText("Quantity?") else row.stacksLabel:SetText("Stacks?") end
         row.stacksLabel:Show()
       end
       if row.stacksCB then
@@ -7373,6 +7608,7 @@ do
       row.editBox:ClearAllPoints()
       row.addButton:ClearAllPoints()
       if row.abilityDD then row.abilityDD:ClearAllPoints() end
+      if row.itemDD then row.itemDD:ClearAllPoints() end
   
       row.editBox:SetWidth(editWidth)
       row.editBox:SetPoint("LEFT", row, "LEFT", 10, 0)
@@ -7390,7 +7626,18 @@ do
           VfxCond_InitAbilityDropdown(row)
           row.abilityDD:Show()
         end
-       row.addButton:Show()
+        row.addButton:Show()
+      elseif row._branch == "ITEM" then
+        if row.itemDD then
+          row.editBox:Hide()
+          row.itemDD:SetPoint("LEFT", row, "LEFT", -15, -3)
+          if UIDropDownMenu_SetWidth then
+            pcall(UIDropDownMenu_SetWidth, editWidth, row.itemDD)
+          end
+          VfxCond_InitItemDropdown(row)
+          row.itemDD:Show()
+        end
+        row.addButton:Show()
       else
         if row.abilityDD then row.abilityDD:Hide() end
         row.editBox:Show()
@@ -7441,6 +7688,8 @@ do
     row._choiceMode = nil
     row._choiceUnit = nil
     row._spellName = nil
+    row._itemName = nil
+    row._choiceItemCd = nil
     row._abilityPage = 1
   
     -- stacks reset
@@ -7502,6 +7751,8 @@ do
       row._choiceMode = (entry and entry.mode) or "found"
       row._choiceUnit = (entry and entry.unit) or "player"
       row._spellName = (entry and entry.name) or ""
+	  row._itemName = (entry and entry.name) or ""
+	  row._choiceItemCd = (entry and entry.unit) or "notcd"
 	  row._stacksEnabled = (entry and entry.stacksEnabled) and true or nil
 	  row._stacksComp    = (entry and entry.stacksComp) or nil
 	  row._stacksVal     = (entry and entry.stacksVal) or nil
@@ -7620,12 +7871,14 @@ do
     local mgr = row._manager
     if not mgr then return end
 
-	local text
-	if row._branch == "ABILITY" then
-	  text = row._spellName or ""
-	else
-	  text = row.editBox and row.editBox:GetText() or ""
-	end
+    local text
+    if row._branch == "ABILITY" then
+      text = row._spellName or ""
+    elseif row._branch == "ITEM" then
+      text = row._itemName or ""
+    else
+      text = row.editBox and row.editBox:GetText() or ""
+    end
 	local parsedInput = VfxCond_ParseAuraInput(text)
 	if not parsedInput then return end
 
@@ -7636,6 +7889,9 @@ do
     if row._branch == "ABILITY" then
       unit = nil
       buffType = "ABILITY"
+    elseif row._branch == "ITEM" then
+      unit = row._choiceItemCd or "notcd"
+      buffType = "ITEM"
     elseif row._branch == "TALENT" then
       unit = nil
     else
@@ -7743,6 +7999,7 @@ do
     row.btn1 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.btn2 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.btn3 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.btn4 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.closeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.editBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
     row.addButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
@@ -7751,6 +8008,7 @@ do
 	
 	local ddName = "DoiteVfxCond_AbilityDD_" .. tostring(mgr.typeKey or "X") .. "_" .. tostring(VfxCond_RowCounter)
 	row.abilityDD = CreateFrame("Frame", ddName, row, "UIDropDownMenuTemplate")
+	row.itemDD = CreateFrame("Frame", "DoiteVfxCond_ItemDD_" .. tostring(mgr.typeKey or "X") .. "_" .. tostring(VfxCond_RowCounter), row, "UIDropDownMenuTemplate")
 	row._abilityPage = 1
 	
 	-- Continue button (between content and X) used in STACKS stage
@@ -7787,9 +8045,11 @@ do
     row.btn1:SetWidth(mainWidth)
     row.btn2:SetWidth(mainWidth)
     row.btn3:SetWidth(mainWidth)
+    row.btn4:SetWidth(mainWidth)
     row.btn1:SetHeight(18)
     row.btn2:SetHeight(18)
     row.btn3:SetHeight(18)
+    row.btn4:SetHeight(18)
 
     row.closeBtn:SetWidth(closeWidth)
     row.closeBtn:SetHeight(18)
@@ -7850,6 +8110,7 @@ do
 	DoiteEdit_YellowifyButton(row.btn1)
 	DoiteEdit_YellowifyButton(row.btn2)
 	DoiteEdit_YellowifyButton(row.btn3)
+	DoiteEdit_YellowifyButton(row.btn4)
 	DoiteEdit_YellowifyButton(row.addButton)
 	DoiteEdit_YellowifyButton(row.closeBtn)
 	DoiteEdit_YellowifyButton(row.okBtn)
@@ -7865,6 +8126,9 @@ do
         if row._branch == "ABILITY" then
           row._choiceMode = "notcd"
           VfxCond_SetRowState(row, "INPUT")
+        elseif row._branch == "ITEM" then
+          row._choiceMode = "found"
+          VfxCond_SetRowState(row, "STEP3")
         elseif row._branch == "TALENT" then
           row._choiceMode = "Known"
           VfxCond_SetRowState(row, "INPUT")
@@ -7873,6 +8137,15 @@ do
           VfxCond_SetRowState(row, "STEP3")
         end
 		elseif state == "STEP3" then
+	      if row._branch == "ITEM" then
+	        row._choiceItemCd = "notcd"
+          if row._choiceMode == "missing" then
+            VfxCond_SetRowState(row, "INPUT")
+          else
+	        VfxCond_SetRowState(row, "STACKS")
+          end
+          return
+        end
 	      row._choiceUnit = "player"
           if row._choiceMode == "missing" then
             VfxCond_SetRowState(row, "INPUT")
@@ -7892,6 +8165,12 @@ do
         if row._branch == "ABILITY" then
           row._choiceMode = "oncd"
           VfxCond_SetRowState(row, "INPUT")
+        elseif row._branch == "ITEM" then
+          row._choiceMode = "missing"
+          row._stacksEnabled = nil
+          row._stacksComp = nil
+          row._stacksVal  = nil
+          VfxCond_SetRowState(row, "STEP3")
         elseif row._branch == "TALENT" then
           row._choiceMode = "NotKnown"
           VfxCond_SetRowState(row, "INPUT")
@@ -7920,6 +8199,15 @@ do
           VfxCond_SetRowState(row, "STEP3")
         end
 		elseif state == "STEP3" then
+	      if row._branch == "ITEM" then
+	        row._choiceItemCd = "oncd"
+          if row._choiceMode == "missing" then
+            VfxCond_SetRowState(row, "INPUT")
+          else
+		    VfxCond_SetRowState(row, "STACKS")
+          end
+          return
+        end
 		  row._choiceUnit = "target"
           if row._choiceMode == "missing" then
             VfxCond_SetRowState(row, "INPUT")
@@ -7944,6 +8232,17 @@ do
       if row._state == "STEP1" then
         row._branch = "TALENT"
         row._choiceBuffType = "TALENT"
+        VfxCond_SetRowState(row, "STEP2")
+      end
+    end)
+
+    row.btn4:SetScript("OnClick", function()
+      if row._state == "STEP1" then
+        row._branch = "ITEM"
+        row._choiceBuffType = "ITEM"
+        row._choiceMode = nil
+        row._choiceUnit = nil
+        row._choiceItemCd = nil
         VfxCond_SetRowState(row, "STEP2")
       end
     end)

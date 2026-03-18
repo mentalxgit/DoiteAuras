@@ -767,6 +767,12 @@ local function DA_AbilityMenu_Initialize()
     end
 end
 
+-- Add passive spells that still can cause CD (be of interest to track)
+local DA_AbilityDropdownPassiveAllow = {
+    ["Reincarnation"] = true,
+}
+_G["DA_AbilityDropdownPassiveAllow"] = DA_AbilityDropdownPassiveAllow
+
 local function DA_RebuildAbilityDropDown()
     if not abilityDropDown then return end
 
@@ -797,9 +803,11 @@ local function DA_RebuildAbilityDropDown()
                 isPassive = true
             end
 
-            if (not isPassive) and name ~= "" then
+            if name and name ~= "" then
                 local lname = string.lower(name or "")
-                if not seen[lname] then
+                local allowPassive = (DA_AbilityDropdownPassiveAllow[name] == true)
+
+                if ((not isPassive) or allowPassive) and not seen[lname] then
                     seen[lname] = true
                     DA_AddAbilityOption(name)
                 end

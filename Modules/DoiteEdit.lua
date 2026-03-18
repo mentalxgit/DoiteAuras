@@ -5662,10 +5662,11 @@ do
     return nil
   end
 
-  -- Build a sorted list of non-passive abilities from the spellbook
+  -- Build a sorted list of abilities from the spellbook, allowing selected passives from DoiteAuras.lua
   local function AuraCond_BuildAbilitySpellList()
     local spells = {}
     local seen = {}
+    local passiveAllow = _G["DA_AbilityDropdownPassiveAllow"] or {}
 
     local function scanBook(bookType)
       local i = 1
@@ -5686,9 +5687,12 @@ do
           isPassive = true
         end
 
-        if not isPassive and name and name ~= "" and not seen[name] then
-          table.insert(spells, name)
-          seen[name] = true
+        if name and name ~= "" then
+          local allowPassive = (passiveAllow[name] == true)
+          if ((not isPassive) or allowPassive) and not seen[name] then
+            table.insert(spells, name)
+            seen[name] = true
+          end
         end
 
         i = i + 1
@@ -6657,9 +6661,27 @@ do
     row.btn3 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.btn4 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.closeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.editBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+    row.editBox = CreateFrame("EditBox", nil, row)
     row.addButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.labelFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+
+    row.editBox:SetAutoFocus(false)
+    row.editBox:SetFontObject("GameFontNormalSmall")
+    if row.editBox.SetTextInsets then
+      row.editBox:SetTextInsets(6, 6, 0, 0)
+    end
+    if row.editBox.SetBackdrop then
+      row.editBox:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+      })
+      row.editBox:SetBackdropColor(0, 0, 0, 0.85)
+      row.editBox:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    end
 
     local ddName = "DoiteAuraCond_AbilityDD_" .. tostring(mgr.typeKey or "X") .. "_" .. tostring(AuraCond_RowCounter)
     row.abilityDD = CreateFrame("Frame", ddName, row, "UIDropDownMenuTemplate")
@@ -6688,11 +6710,26 @@ do
 	  pcall(UIDropDownMenu_SetWidth, row._stacksCompWidth, row.stacksCompDD)
 	end
 	
-	row.stacksVal = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+	row.stacksVal = CreateFrame("EditBox", nil, row)
 	row.stacksVal:SetWidth(40)
 	row.stacksVal:SetHeight(18)
 	row.stacksVal:SetAutoFocus(false)
 	row.stacksVal:SetFontObject("GameFontNormalSmall")
+    if row.stacksVal.SetTextInsets then
+      row.stacksVal:SetTextInsets(6, 6, 0, 0)
+    end
+    if row.stacksVal.SetBackdrop then
+      row.stacksVal:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+      })
+      row.stacksVal:SetBackdropColor(0, 0, 0, 0.85)
+      row.stacksVal:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    end
 
 	row.stacksValEnter = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	row.stacksValEnter:SetText("(#)")
@@ -7488,10 +7525,11 @@ do
     return n
   end
   
-  -- Build a sorted list of non-passive abilities from the spellbook (same logic as AuraCond)
+  -- Build a sorted list of abilities from the spellbook, allowing selected passives from DoiteAuras.lua
   local function VfxCond_BuildAbilitySpellList()
     local spells = {}
     local seen = {}
+    local passiveAllow = _G["DA_AbilityDropdownPassiveAllow"] or {}
 
     local function scanBook(bookType)
       local i = 1
@@ -7510,9 +7548,12 @@ do
           isPassive = true
         end
 
-        if not isPassive and name and name ~= "" and not seen[name] then
-          table.insert(spells, name)
-          seen[name] = true
+        if name and name ~= "" then
+          local allowPassive = (passiveAllow[name] == true)
+          if ((not isPassive) or allowPassive) and not seen[name] then
+            table.insert(spells, name)
+            seen[name] = true
+          end
         end
 
         i = i + 1
@@ -8220,10 +8261,28 @@ do
     row.btn3 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.btn4 = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.closeBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    row.editBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+    row.editBox = CreateFrame("EditBox", nil, row)
     row.addButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.labelFS = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.labelFS:SetJustifyH("LEFT")
+
+    row.editBox:SetAutoFocus(false)
+    row.editBox:SetFontObject("GameFontNormalSmall")
+    if row.editBox.SetTextInsets then
+      row.editBox:SetTextInsets(6, 6, 0, 0)
+    end
+    if row.editBox.SetBackdrop then
+      row.editBox:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+      })
+      row.editBox:SetBackdropColor(0, 0, 0, 0.85)
+      row.editBox:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    end
 	
 	local ddName = "DoiteVfxCond_AbilityDD_" .. tostring(mgr.typeKey or "X") .. "_" .. tostring(VfxCond_RowCounter)
 	row.abilityDD = CreateFrame("Frame", ddName, row, "UIDropDownMenuTemplate")
@@ -8252,11 +8311,26 @@ do
 	  pcall(UIDropDownMenu_SetWidth, row._stacksCompWidth, row.stacksCompDD)
 	end
 
-	row.stacksVal = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+	row.stacksVal = CreateFrame("EditBox", nil, row)
 	row.stacksVal:SetWidth(40)
 	row.stacksVal:SetHeight(18)
 	row.stacksVal:SetAutoFocus(false)
 	row.stacksVal:SetFontObject("GameFontNormalSmall")
+    if row.stacksVal.SetTextInsets then
+      row.stacksVal:SetTextInsets(6, 6, 0, 0)
+    end
+    if row.stacksVal.SetBackdrop then
+      row.stacksVal:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+      })
+      row.stacksVal:SetBackdropColor(0, 0, 0, 0.85)
+      row.stacksVal:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    end
 
 	row.stacksValEnter = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	row.stacksValEnter:SetText("(#)")

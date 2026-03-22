@@ -1029,6 +1029,7 @@ local INV_SLOT_TRINKET2 = 14
 local INV_SLOT_MAINHAND = 16
 local INV_SLOT_OFFHAND = 17
 local INV_SLOT_RANGED = 18
+local INV_SLOT_AMMO = 0
 
 local DOITE_ITEM_CD_IGNORE = 5.0
 
@@ -1047,6 +1048,9 @@ local function _SlotIndexForName(name)
   end
   if name == "RANGED" then
     return INV_SLOT_RANGED
+  end
+  if name == "AMMO" then
+    return INV_SLOT_AMMO
   end
   return nil
 end
@@ -1423,13 +1427,21 @@ local function _EvaluateItemCoreState(data, c)
     local mode = c.mode or ""
     local key = data and data.key
 
-    -- Direct 1:1 slot bindings (TRINKET1 / TRINKET2 / MAINHAND / OFFHAND / RANGED)
+    -- Direct 1:1 slot bindings (TRINKET1 / TRINKET2 / MAINHAND / OFFHAND / RANGED / AMMO)
     if invSlotName == "TRINKET1" or invSlotName == "TRINKET2"
         or invSlotName == "MAINHAND" or invSlotName == "OFFHAND"
-        or invSlotName == "RANGED" then
+        or invSlotName == "RANGED" or invSlotName == "AMMO" then
 
       local idx = _SlotIndexForName(invSlotName)
-      local hasItem, onCd, rem, dur = _GetInventorySlotState(idx)
+      local hasItem, onCd, rem, dur
+      if invSlotName == "AMMO" then
+        hasItem = (GetInventoryItemTexture("player", INV_SLOT_AMMO) ~= nil)
+        onCd = false
+        rem = 0
+        dur = 0
+      else
+        hasItem, onCd, rem, dur = _GetInventorySlotState(idx)
+      end
       state.hasItem = hasItem
       state.isMissing = not hasItem
       state.rem = rem
@@ -1456,7 +1468,7 @@ local function _EvaluateItemCoreState(data, c)
       -- Cache persists across weapon swaps so countdown continues even
       -- if the enchanted weapon is not currently equipped in that slot.
       ----------------------------------------------------------------
-      if (invSlotName == "MAINHAND" or invSlotName == "OFFHAND" or invSlotName == "RANGED")
+      if (invSlotName == "MAINHAND" or invSlotName == "OFFHAND")
           and data.displayName == "---EQUIPPED WEAPON SLOTS---" then
 
         local needTE = false
@@ -1861,7 +1873,7 @@ local function _EvaluateItemCoreState(data, c)
 	-- for synthetic entries, treat "stack count" as 1 if an item exists
     if state.hasItem then
       -- Special case: equipped weapon slots can show temp enchant charges
-      if (invSlotName == "MAINHAND" or invSlotName == "OFFHAND" or invSlotName == "RANGED")
+      if (invSlotName == "MAINHAND" or invSlotName == "OFFHAND")
           and data.displayName == "---EQUIPPED WEAPON SLOTS---"
 		  and (mode == "notcd" or mode == "both")
           and (c.textStackCounter == true or c.stacksEnabled == true) then
@@ -1879,10 +1891,14 @@ local function _EvaluateItemCoreState(data, c)
         state.totalCount = ch
         state.effectiveCount = ch
       else
-        state.eqCount = 1
+        local slotCount = GetInventoryItemCount("player", idx) or 0
+        if slotCount <= 0 then
+          slotCount = 1
+        end
+        state.eqCount = slotCount
         state.bagCount = 0
-        state.totalCount = 1
-        state.effectiveCount = 1
+        state.totalCount = slotCount
+        state.effectiveCount = slotCount
       end
     else
       state.eqCount = 0
@@ -4587,7 +4603,7 @@ local function _EnsureItemTexture(frame, data)
 
   if invSlotName == "TRINKET1" or invSlotName == "TRINKET2"
       or invSlotName == "MAINHAND" or invSlotName == "OFFHAND"
-      or invSlotName == "RANGED" then
+      or invSlotName == "RANGED" or invSlotName == "AMMO" then
 
     slot = _SlotIndexForName(invSlotName)
 
@@ -5802,7 +5818,7 @@ local function CheckItemConditions(data)
     if threshold then
       if (c.mode == "notcd" or c.mode == "both")
           and (data.displayName == "---EQUIPPED WEAPON SLOTS---")
-          and (c.inventorySlot == "MAINHAND" or c.inventorySlot == "OFFHAND" or c.inventorySlot == "RANGED") then
+          and (c.inventorySlot == "MAINHAND" or c.inventorySlot == "OFFHAND") then
         if (not state) or (not state.teRem) or state.teRem <= 0 then
           show = false
         else
@@ -6661,7 +6677,7 @@ local function _Doite_UpdateOverlayForFrame(frame, key, dataTbl, slideActive)
         -- Special case: equipped weapon slots + mode=notcd/both => show temp enchant remaining time
         if (ci.mode == "notcd" or ci.mode == "both")
             and (dataTbl.displayName == "---EQUIPPED WEAPON SLOTS---")
-            and (ci.inventorySlot == "MAINHAND" or ci.inventorySlot == "OFFHAND" or ci.inventorySlot == "RANGED") then
+            and (ci.inventorySlot == "MAINHAND" or ci.inventorySlot == "OFFHAND") then
 
           local remTE = itemState and itemState.teRem or 0
           if remTE and remTE > 0 then
@@ -6864,7 +6880,7 @@ local function _Doite_UpdateOverlayForFrame(frame, key, dataTbl, slideActive)
 
       -- Special case: equipped weapon slots show temp enchant charges (including 0)
       if (dataTbl.displayName == "---EQUIPPED WEAPON SLOTS---")
-          and (ci.inventorySlot == "MAINHAND" or ci.inventorySlot == "OFFHAND" or ci.inventorySlot == "RANGED") then
+          and (ci.inventorySlot == "MAINHAND" or ci.inventorySlot == "OFFHAND") then
 
         if not cnt then
           cnt = 0

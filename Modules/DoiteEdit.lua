@@ -2289,7 +2289,8 @@ local function CreateConditionsUI()
 
   condFrame.cond_item_inv_wep_mainhand = MakeCheck("DoiteCond_Item_Inv_WepMain", "Main-hand", 0, row1_y)
   condFrame.cond_item_inv_wep_offhand = MakeCheck("DoiteCond_Item_Inv_WepOff", "Off-hand", 87, row1_y)
-  condFrame.cond_item_inv_wep_ranged = MakeCheck("DoiteCond_Item_Inv_WepRanged", "Ranged/Idol/Relic", 165, row1_y)
+  condFrame.cond_item_inv_wep_ranged = MakeCheck("DoiteCond_Item_Inv_WepRanged", "Ranged", 165, row1_y)
+  condFrame.cond_item_inv_wep_ammo = MakeCheck("DoiteCond_Item_Inv_WepAmmo", "Ammo", 235, row1_y)
 
   -- Default title; changed dynamically in UpdateConditionsUI for special items
   SetSeparator("item", 1, "WHEREABOUTS", true, true)
@@ -3248,6 +3249,8 @@ function UpdateItemStacksForMissing()
       ic.inventorySlot = "MAINHAND"
     elseif condFrame.cond_item_inv_wep_offhand:GetChecked() then
       ic.inventorySlot = "OFFHAND"
+    elseif condFrame.cond_item_inv_wep_ammo and condFrame.cond_item_inv_wep_ammo:GetChecked() then
+      ic.inventorySlot = "AMMO"
     else
       -- default / fallback
       ic.inventorySlot = "RANGED"
@@ -3289,6 +3292,7 @@ function UpdateItemStacksForMissing()
       local c1 = condFrame.cond_item_inv_wep_mainhand
       local c2 = condFrame.cond_item_inv_wep_offhand
       local c3 = condFrame.cond_item_inv_wep_ranged
+      local c4 = condFrame.cond_item_inv_wep_ammo
 
       if clicked:GetChecked() then
         if clicked ~= c1 then
@@ -3300,10 +3304,13 @@ function UpdateItemStacksForMissing()
         if clicked ~= c3 then
           c3:SetChecked(false)
         end
+        if c4 and clicked ~= c4 then
+          c4:SetChecked(false)
+        end
       end
 
       -- ensure at least one checked
-      if not c1:GetChecked() and not c2:GetChecked() and not c3:GetChecked() then
+      if not c1:GetChecked() and not c2:GetChecked() and not c3:GetChecked() and (not c4 or not c4:GetChecked()) then
         clicked:SetChecked(true)
       end
     end
@@ -3373,6 +3380,16 @@ function UpdateItemStacksForMissing()
     SafeEvaluate()
   end)
   condFrame.cond_item_inv_wep_ranged:SetScript("OnClick", function()
+    if not currentKey then
+      this:SetChecked(false)
+      return
+    end
+    EnforceInventoryRadio(this, "WEAPON")
+    SaveItemInventoryWeaponFromUI()
+    SafeRefresh();
+    SafeEvaluate()
+  end)
+  condFrame.cond_item_inv_wep_ammo:SetScript("OnClick", function()
     if not currentKey then
       this:SetChecked(false)
       return
@@ -5392,6 +5409,9 @@ function UpdateItemStacksForMissing()
   condFrame.cond_item_inv_wep_mainhand:Hide()
   condFrame.cond_item_inv_wep_offhand:Hide()
   condFrame.cond_item_inv_wep_ranged:Hide()
+  if condFrame.cond_item_inv_wep_ammo then
+    condFrame.cond_item_inv_wep_ammo:Hide()
+  end
   if condFrame.cond_item_class_note then
     condFrame.cond_item_class_note:Hide()
   end
@@ -9392,6 +9412,9 @@ local function UpdateConditionsUI(data)
     if condFrame.cond_item_inv_wep_ranged then
       condFrame.cond_item_inv_wep_ranged:Hide()
     end
+    if condFrame.cond_item_inv_wep_ammo then
+      condFrame.cond_item_inv_wep_ammo:Hide()
+    end
     if condFrame.cond_item_class_note then
       condFrame.cond_item_class_note:Hide()
     end
@@ -9527,6 +9550,9 @@ local ic = c.item or {}
           condFrame.cond_item_inv_wep_mainhand:Hide()
           condFrame.cond_item_inv_wep_offhand:Hide()
           condFrame.cond_item_inv_wep_ranged:Hide()
+          if condFrame.cond_item_inv_wep_ammo then
+            condFrame.cond_item_inv_wep_ammo:Hide()
+          end
         end
 
         -- Show trinket radios
@@ -9560,10 +9586,21 @@ local ic = c.item or {}
         condFrame.cond_item_inv_wep_mainhand:Show()
         condFrame.cond_item_inv_wep_offhand:Show()
         condFrame.cond_item_inv_wep_ranged:Show()
+        if condFrame.cond_item_inv_wep_ammo then
+          condFrame.cond_item_inv_wep_ammo:Show()
+        end
 
         local slot = ic.inventorySlot
-        if slot ~= "MAINHAND" and slot ~= "OFFHAND" and slot ~= "RANGED" then
+        if slot ~= "MAINHAND" and slot ~= "OFFHAND" and slot ~= "RANGED" and slot ~= "AMMO" then
           -- default: Main hand
+          slot = "MAINHAND"
+          ic.inventorySlot = slot
+        end
+
+        local _, classTag = UnitClass("player")
+        classTag = classTag and string.upper(classTag) or ""
+        local ammoAllowed = (classTag == "WARRIOR" or classTag == "ROGUE" or classTag == "HUNTER")
+        if (slot == "AMMO") and (not ammoAllowed) then
           slot = "MAINHAND"
           ic.inventorySlot = slot
         end
@@ -9571,6 +9608,15 @@ local ic = c.item or {}
         condFrame.cond_item_inv_wep_mainhand:SetChecked(slot == "MAINHAND")
         condFrame.cond_item_inv_wep_offhand:SetChecked(slot == "OFFHAND")
         condFrame.cond_item_inv_wep_ranged:SetChecked(slot == "RANGED")
+        if condFrame.cond_item_inv_wep_ammo then
+          condFrame.cond_item_inv_wep_ammo:SetChecked(slot == "AMMO")
+          if ammoAllowed then
+            _enCheck(condFrame.cond_item_inv_wep_ammo)
+          else
+            condFrame.cond_item_inv_wep_ammo:SetChecked(false)
+            _disCheck(condFrame.cond_item_inv_wep_ammo)
+          end
+        end
       end
 
       -- isMissing stays false here -> never greys out other rows
@@ -9590,6 +9636,9 @@ local ic = c.item or {}
         condFrame.cond_item_inv_wep_mainhand:Hide()
         condFrame.cond_item_inv_wep_offhand:Hide()
         condFrame.cond_item_inv_wep_ranged:Hide()
+        if condFrame.cond_item_inv_wep_ammo then
+          condFrame.cond_item_inv_wep_ammo:Hide()
+        end
       end
 
       condFrame.cond_item_where_equipped:Show()
@@ -9703,11 +9752,13 @@ local ic = c.item or {}
     condFrame.cond_item_notcd:SetChecked(mode == "notcd" or mode == "both")
     condFrame.cond_item_oncd:SetChecked(mode == "oncd" or mode == "both")
 
-    -- Enchanted state dropdown: Enabled ONLY for weapon slots + notcd/both + not missing. Disabled elsewhere, and clears ic.enchant when disabled.
+    local isMainOffhandWeaponSlot = (ic.inventorySlot == "MAINHAND" or ic.inventorySlot == "OFFHAND")
+
+    -- Enchanted state dropdown: Enabled ONLY for main/off-hand weapon slots + notcd/both + not missing. Disabled elsewhere, and clears ic.enchant when disabled.
     if condFrame.cond_item_enchant then
       condFrame.cond_item_enchant:Show()
 
-      local allowEnchant = (not isMissing) and isWeaponSlots and (mode == "notcd" or mode == "both")
+      local allowEnchant = (not isMissing) and isWeaponSlots and isMainOffhandWeaponSlot and (mode == "notcd" or mode == "both")
       if allowEnchant then
         _enCheck(condFrame.cond_item_enchant)
 
@@ -9751,11 +9802,11 @@ local ic = c.item or {}
       end
     end
 
-    -- Icon text: Enchant uptime remaining. Enabled ONLY for weapon slots + notcd/both + not missing, AND only when enchanted-state is not explicitly "Not enchanted". If "Not enchanted" is selected, force OFF + disable + clear DB entry (cannot show uptime if not enchanted).
+    -- Icon text: Enchant uptime remaining. Enabled ONLY for main/off-hand weapon slots + notcd/both + not missing, AND only when enchanted-state is not explicitly "Not enchanted". If "Not enchanted" is selected, force OFF + disable + clear DB entry (cannot show uptime if not enchanted).
     if condFrame.cond_item_text_enchant then
       condFrame.cond_item_text_enchant:Show()
 
-      local allowEnchantText = (not isMissing) and isWeaponSlots and (mode == "notcd" or mode == "both")
+      local allowEnchantText = (not isMissing) and isWeaponSlots and isMainOffhandWeaponSlot and (mode == "notcd" or mode == "both")
 
       -- extra rule: "Not enchanted" disables this checkbox and clears its DB entry
       if allowEnchantText and (ic.enchant == false) then
@@ -9910,7 +9961,7 @@ local ic = c.item or {}
     -- Icon text: Time remaining (shared DB key: ic.textTimeRemaining)
 
     do
-      local allowTime = (not isMissing) and (mode == "oncd" or (not isWeaponSlots and mode == "both"))
+      local allowTime = (not isMissing) and (mode == "oncd" or ((not isMainOffhandWeaponSlot) and mode == "both"))
 
       if allowTime then
         _enCheck(condFrame.cond_item_text_time)
@@ -9919,7 +9970,7 @@ local ic = c.item or {}
         condFrame.cond_item_text_time:SetChecked(false)
         _disCheck(condFrame.cond_item_text_time)
 
-        if not (isWeaponSlots and (mode == "notcd" or mode == "both")) then
+        if not (isMainOffhandWeaponSlot and (mode == "notcd" or mode == "both")) then
           if ic.textTimeRemaining ~= nil then
             ic.textTimeRemaining = nil
           end
@@ -10072,7 +10123,7 @@ local ic = c.item or {}
     -- REMAINING TIME
     do
       local sepTitle = "REMAINING TIME"
-      if isWeaponSlots then
+      if isMainOffhandWeaponSlot then
         if mode == "notcd" or mode == "both" then
           sepTitle = "REMAINING TIME (TEMPORARY WEAPON ENCHANT)"
         elseif mode == "oncd" then
@@ -10082,7 +10133,7 @@ local ic = c.item or {}
       SetSeparator("item", 12, sepTitle, true, true)
     end
     condFrame.cond_item_remaining_cb:Show()
-	if (not isMissing) and (mode == "oncd" or (not isWeaponSlots and mode == "both") or (isWeaponSlots and (mode == "notcd" or mode == "both"))) then
+	if (not isMissing) and (mode == "oncd" or ((not isMainOffhandWeaponSlot) and mode == "both") or (isMainOffhandWeaponSlot and (mode == "notcd" or mode == "both"))) then
 	  _enCheck(condFrame.cond_item_remaining_cb)
 	  local remOn = (ic.remainingEnabled == true)
 	  condFrame.cond_item_remaining_cb:SetChecked(remOn)
@@ -10498,6 +10549,7 @@ local ic = c.item or {}
     _Hide(condFrame.cond_item_inv_wep_mainhand)
     _Hide(condFrame.cond_item_inv_wep_offhand)
     _Hide(condFrame.cond_item_inv_wep_ranged)
+    _Hide(condFrame.cond_item_inv_wep_ammo)
     _Hide(condFrame.cond_item_incombat)
     _Hide(condFrame.cond_item_outcombat)
     _Hide(condFrame.cond_item_groupingDD)
@@ -11443,6 +11495,9 @@ local ic = c.item or {}
     end
     if condFrame.cond_item_inv_wep_ranged then
       condFrame.cond_item_inv_wep_ranged:Hide()
+    end
+    if condFrame.cond_item_inv_wep_ammo then
+      condFrame.cond_item_inv_wep_ammo:Hide()
     end
     if condFrame.cond_item_class_note then
       condFrame.cond_item_class_note:Hide()

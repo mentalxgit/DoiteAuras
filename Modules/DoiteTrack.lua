@@ -263,7 +263,8 @@ local function _AddTrackedFromEntry(_, data)
   end
 
 
-  local hasTarget = (c.targetSelf or c.targetHelp or c.targetHarm)
+  -- Ownership tracking is only meaningful for external targets.
+  local hasTarget = (c.targetHelp or c.targetHarm)
   if not hasTarget then
     return
   end
@@ -299,7 +300,6 @@ local function _AddTrackedFromEntry(_, data)
       name = name,
       normName = norm,
       kind = data.type,
-      trackSelf = false,
       trackHelp = false,
       trackHarm = false,
       onlyMine = false,
@@ -318,9 +318,6 @@ local function _AddTrackedFromEntry(_, data)
     TrackedByNameNorm[norm] = entry
   end
 
-  if c.targetSelf then
-    entry.trackSelf = true
-  end
   if c.targetHelp then
     entry.trackHelp = true
   end
@@ -1602,18 +1599,13 @@ function DoiteTrack:_OnSpellCastEvent()
     return
   end
 
-  -- Resolve target: self-only -> player, else must be real target
-  local selfOnly = (entry.trackSelf and (not entry.trackHelp) and (not entry.trackHarm))
-  if selfOnly then
-    targetGuid = pGuid
-  else
-    if _IsBadGuid(targetGuid) then
-      local tg = _GetUnitGuidSafe("target")
-      if not tg or tg == "" then
-        return
-      end
-      targetGuid = tg
+  -- Resolve target from NP event, fallback to current target.
+  if _IsBadGuid(targetGuid) then
+    local tg = _GetUnitGuidSafe("target")
+    if not tg or tg == "" then
+      return
     end
+    targetGuid = tg
   end
 
   -- Only snapshot CP if this spellId has a CP-table manual entry
@@ -1998,8 +1990,6 @@ function DoiteTrack:_OnAuraNPEvent()
 
     if event == "AURA_CAST_ON_SELF" then
       selfOnly = true
-    elseif entry then
-      selfOnly = (entry.trackSelf and (not entry.trackHelp) and (not entry.trackHarm))
     end
 
     if selfOnly then

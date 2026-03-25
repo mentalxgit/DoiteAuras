@@ -237,25 +237,6 @@ local function _IsHunterOrWarlock()
   return (c == "HUNTER" or c == "WARLOCK")
 end
 
--- If an aura is ALWAYS applied by the player to the player, ownership is meaningless.
-local DOITE_AURA_OWNER_LOCK_ON_SELF = {
-  ["Zeal"] = true, ["Berserker Rage"] = true,
-}
-
-local function DoiteEdit_ShouldLockAuraOwnerOnSelf(data)
-  if not data then
-    return false
-  end
-  local name = data.displayName or currentKey
-  if not name or name == "" then
-    name = currentKey
-  end
-  if not name then
-    return false
-  end
-  return DOITE_AURA_OWNER_LOCK_ON_SELF[name] == true
-end
-
 local function DoiteEdit_YellowifyButton(btn)
   if not btn then
     return
@@ -10969,11 +10950,11 @@ local ic = c.item or {}
       end
     end
 
-    -- If this aura is in the lock-list AND target is "On player (self)", ownership is meaningless.
+    -- If target is "On player (self)", ownership is meaningless.
     local lockOwnerOnSelf = false
     if isTrackPetActive then
       lockOwnerOnSelf = true
-    elseif isSelfOnly and DoiteEdit_ShouldLockAuraOwnerOnSelf and DoiteEdit_ShouldLockAuraOwnerOnSelf(data) then
+    elseif isSelfOnly then
       lockOwnerOnSelf = true
     end
 

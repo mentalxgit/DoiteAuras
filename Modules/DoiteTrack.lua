@@ -39,22 +39,10 @@ local ManualDurationBySpellId = {
   [11275] = { [1]=8,[2]=10,[3]=12,[4]=14,[5]=16 }, -- Rupture Rank 6
   
   ----------------------------------------------------------------
-  -- Taste for Blood (2 ranks) - CP based
-  ----------------------------------------------------------------
-  [52528] = { [1]=12,[2]=14,[3]=16,[4]=18,[5]=20 }, -- Taste for Blood Rank 1
-  [52529] = { [1]=14,[2]=16,[3]=18,[4]=20,[5]=22 }, -- Taste for Blood Rank 2
-
-  ----------------------------------------------------------------
   -- Kidney Shot (2 ranks) - CP based
   ----------------------------------------------------------------
   [408] = { [1]=1,[2]=2,[3]=3,[4]=4,[5]=5 }, -- Kidney Shot Rank 1
   [8643] = { [1]=2,[2]=3,[3]=4,[4]=5,[5]=6 }, -- Kidney Shot Rank 2
-  
-  ----------------------------------------------------------------
-  -- Slice and Dice (2 ranks) - CP based
-  ----------------------------------------------------------------
-  [5171] = { [1]=9,[2]=12,[3]=15,[4]=18,[5]=21 }, -- Slice and Dice Rank 1
-  [6774] = { [1]=9,[2]=12,[3]=15,[4]=18,[5]=21 }, -- Slice and Dice Rank 2
   
   ----------------------------------------------------------------
   -- Envenom (1 ranks) - CP based
@@ -623,8 +611,7 @@ local _MoltenBlastSpellIdCache = {} -- [spellId] = true/false
 _IsPlayerDruid = false
 _IsPlayerRogue = false
 local _CarnageRank = 0             -- druid: >0 enables Carnage proc logic
-local _TasteForBloodRank = 0       -- rogue: 0..2, adds +2s per point to manual Rupture
-local _ImprovedBladeTacticsRank = 0 -- rogue: 0..3, +15/30/45% to Slice and Dice manual duration
+local _TasteForBloodRank = 0       -- rogue: 0..2, manual Rupture +4s at rank1, +6s at rank2
 
 -- Druid Carnage proc detection
 local _FerociousBiteSpellIdCache = {} -- [spellId] = true/false
@@ -687,7 +674,6 @@ end
 local function _UpdateTalentCaches()
   _CarnageRank = 0
   _TasteForBloodRank = 0
-  _ImprovedBladeTacticsRank = 0
 
   if not UnitClass then
     _IsPlayerDruid = false
@@ -710,7 +696,6 @@ local function _UpdateTalentCaches()
 
   local needCarnage = _IsPlayerDruid
   local needTaste = _IsPlayerRogue
-  local needBlade = _IsPlayerRogue
 
   local numTabs = tonumber(GetNumTalentTabs()) or 0
   local tab
@@ -729,11 +714,7 @@ local function _UpdateTalentCaches()
           _TasteForBloodRank = tonumber(rank) or 0
           needTaste = false
         end
-        if needBlade and norm == "improved blade tactics" then
-          _ImprovedBladeTacticsRank = tonumber(rank) or 0
-          needBlade = false
-        end
-        if (not needCarnage) and (not needTaste) and (not needBlade) then
+        if (not needCarnage) and (not needTaste) then
           return
         end
       end
@@ -2078,18 +2059,15 @@ function DoiteTrack:_OnAuraNPEvent()
     if cp and cp > 0 then
       manualSec = _GetManualDurationBySpellId(spellId, cp)
 
-      -- Rogue SC: Taste for Blood increases Rupture duration by +2s per talent point.
+      -- Rogue SC: Taste for Blood increases Rupture duration:
+      -- rank 1 => +4s, rank 2 => +6s total.
       if manualSec and manualSec > 0 and _IsPlayerRogue and _TasteForBloodRank and _TasteForBloodRank > 0 then
         if spellNameNorm == "rupture" then
-          manualSec = manualSec + (_TasteForBloodRank * 2)
-        end
-      end
-
-      -- Rogue SC: Improved Blade Tactics increases Slice and Dice duration by +15%/+30%/+45%. Apply to the *manual* CP-table duration (same place as Rupture edge case).
-      if manualSec and manualSec > 0 and _IsPlayerRogue and _ImprovedBladeTacticsRank and _ImprovedBladeTacticsRank > 0 then
-        if spellNameNorm == "slice and dice" then
-          local pct = _ImprovedBladeTacticsRank * 15
-          manualSec = math.floor((manualSec * (100 + pct)) / 100 + 0.5)
+          if _TasteForBloodRank >= 2 then
+            manualSec = manualSec + 6
+          else
+            manualSec = manualSec + 4
+          end
         end
       end
     end

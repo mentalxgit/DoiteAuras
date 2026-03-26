@@ -11,8 +11,8 @@ Visit the original DoiteAuras by Doite: https://github.com/Player-Doite/DoiteAur
 _Please respect the license note._
 
 ## Features
-- Able to track an ability, buff, debuff and/or item
-- Match genereically by entering a name or uniquely via SpellID
+- Able to track an ability, buff, debuff and/or item (on player, target or pet)
+- Match generically by entering a name or uniquely via SpellID
 - Player buffs/debuffs visible beyond the visible cap (32)
 - Import/export functions to share UI profiles
 - Custom conditions (~50) to align when to show/hide icons

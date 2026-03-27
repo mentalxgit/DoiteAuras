@@ -11549,6 +11549,23 @@ function UpdateCondFrameForKey(key)
     return
   end
 
+  currentKey = key
+  _G["DoiteEdit_CurrentKey"] = key
+
+  -- Jeremy added : Always clean up a previous bar injection before doing anything else
+  if DoiteBars and DoiteBars.CleanupCondFrame then
+    DoiteBars.CleanupCondFrame(condFrame)
+  end
+
+  -- Bar type: DoiteBars injection
+  local _earlyData = DoiteAurasDB and DoiteAurasDB.spells and DoiteAurasDB.spells[key]
+  if _earlyData and _earlyData.type == "Bar" then
+    if DoiteBars and DoiteBars.InjectEditControls then
+      DoiteBars.InjectEditControls(condFrame, key)
+    end
+    return
+  end
+
   -- When switching icons, force-close the AND/OR logic popup for the old icon
   if DoiteAuraLogicFrame and DoiteAuraLogicFrame:IsShown() then
     DoiteAuraLogicFrame:Hide()
@@ -11564,9 +11581,6 @@ function UpdateCondFrameForKey(key)
       oldFrame:EnableMouse(false)
     end
   end
-
-  currentKey = key
-  _G["DoiteEdit_CurrentKey"] = key
 
   -- Enable mouse on the newly edited icon frame (for dragging)
   local newFrame = _GetIconFrame(key)
@@ -11607,6 +11621,8 @@ function UpdateCondFrameForKey(key)
     typeColor = "|cffff4d4d"
   elseif data.type == "Item" then
     typeColor = "|cffffd000"
+  elseif data.type == "Bar" then
+    typeColor = "|cffd27dff"
   elseif data.type == "Custom" then
     typeColor = "|cff7dd2ff"
   end
@@ -11720,6 +11736,7 @@ function DoiteConditions_Show(key)
     return
   end
 
+  -- Jeremy: This is the main frame and cond names, this comment is just a refence for me :D
   -- create the frame if needed
   if not condFrame then
     condFrame = CreateFrame("Frame", "DoiteConditionsFrame", UIParent)
@@ -11767,6 +11784,10 @@ function DoiteConditions_Show(key)
       end
       if DoiteAuras_RefreshIcons then
         DoiteAuras_RefreshIcons()
+      end
+      -- Clean up any bar edit injection
+      if DoiteBars and DoiteBars.CleanupCondFrame then
+        DoiteBars.CleanupCondFrame(condFrame)
       end
     end)
 

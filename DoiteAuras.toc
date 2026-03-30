@@ -18,3 +18,4 @@ Modules\DoiteLogic.lua
 Modules\DoiteExport.lua
 Modules\DoiteTrack.lua
 Modules\DoiteSettings.lua
+Modules\DoiteBars.lua

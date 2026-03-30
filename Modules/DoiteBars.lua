@@ -1,17 +1,8 @@
 ---------------------------------------------------------------
 -- DoiteBars.lua
---
--- HOW TO ADD A NEW BAR KIND:
---   1. Add an entry to DoiteBars.Kinds (see below).
---   2. Add the key to DoiteBars.KindOrder.
---   3. That's it. The rest of the system picks it up automatically.
---
--- EDIT PANEL:
---   When the user clicks Edit on a Bar list entry, DoiteEdit.lua
---   calls DoiteBars.InjectEditControls(condFrame, key).
---   This hides all of condFrame's normal children and injects a
---   scrollable Bar-specific settings container directly inside it.
---   DoiteBars.CleanupCondFrame(condFrame) reverses this.
+-- Adding bars, all edit, updates and condition logic
+-- Please respect license note: Ask permission
+-- WoW 1.12 | Lua 5.0
 ---------------------------------------------------------------
 
 DoiteBars = DoiteBars or {}

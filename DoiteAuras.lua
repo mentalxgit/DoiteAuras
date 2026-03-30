@@ -606,21 +606,21 @@ end
 local barDropDown = CreateFrame("Frame", "DoiteAurasBarDropDown", frame, "UIDropDownMenuTemplate")
 barDropDown:SetPoint("TOPLEFT", input, "TOPLEFT", -23, 3)
 
--- Populate Bars dropdown with static "coming soon" entries
+-- Populate Bars dropdown
 UIDropDownMenu_Initialize(barDropDown, function()
     local info
 
     info = {}
-    info.text = "Healthbar (coming soon)"
+    info.text = "Healthbar"
     info.func = function()
-        UIDropDownMenu_SetText("Healthbar (coming soon)", barDropDown)
+        UIDropDownMenu_SetText("Healthbar", barDropDown)
     end
     UIDropDownMenu_AddButton(info)
 
     info = {}
-    info.text = "Powerbar (coming soon)"
+    info.text = "Powerbar"
     info.func = function()
-        UIDropDownMenu_SetText("Powerbar (coming soon)", barDropDown)
+        UIDropDownMenu_SetText("Powerbar", barDropDown)
     end
     UIDropDownMenu_AddButton(info)
 
@@ -641,7 +641,7 @@ end)
 
 UIDropDownMenu_SetWidth(230, barDropDown)
 UIDropDownMenu_SetText("Select from dropdown", barDropDown)
-barDropDown:Hide()
+barDropDown:Hide()  
 
 -- Force the bar dropdown text to be left-aligned
 local barText  = getglobal("DoiteAurasBarDropDownText")
@@ -1140,6 +1140,7 @@ local function DA_GetDropDownText(dd)
     return nil
 end
 
+
 -- Type selector checkboxes
 local currentType = "Ability"
 local abilityCB, buffCB, debuffCB, itemsCB, barsCB, customCB
@@ -1186,7 +1187,7 @@ local function DA_UpdateTypeUI()
             UIDropDownMenu_SetText("Select from dropdown", barDropDown)
         end
         if itemDropDown then itemDropDown:Hide() end
-        if addBtn then addBtn:Disable() end
+        if addBtn then addBtn:Enable() end
 
     elseif currentType == "Custom" then
         intro:SetText("Enter the custom aura name:")
@@ -1334,6 +1335,7 @@ barsCB:SetScript("OnClick", function()
     barsCB:SetChecked(true)
     currentType = "Bar"
     DA_UpdateTypeUI()
+    DA_RebuildBarDropDown()
 end)
 
 customCB:SetScript("OnClick", function()
@@ -2557,8 +2559,10 @@ local function RefreshIcons(force)
 
     -- Step 2: ensure icons exist first, then apply group layout once
     for _, entry in ipairs(candidates) do
-        if not (DoiteAuras_GetIconFrame and DoiteAuras_GetIconFrame(entry.key)) then
-            CreateOrUpdateIcon(entry.key, 36)
+        if entry.data and entry.data.type ~= "Bar" then
+            if not (DoiteAuras_GetIconFrame and DoiteAuras_GetIconFrame(entry.key)) then
+                CreateOrUpdateIcon(entry.key, 36)
+            end
         end
     end
 
@@ -2665,7 +2669,7 @@ local function RefreshIcons(force)
             end
         end
 
-        if not f then
+        if not f and data and data.type ~= "Bar" then
             f = CreateOrUpdateIcon(key, 36)
         end
 
@@ -3335,6 +3339,9 @@ local function RefreshList()
                     if icons and icons[key] then
                         icons[key] = nil
                     end
+                    if DoiteBars and DoiteBars.DestroyBar then
+                        DoiteBars.DestroyBar(key)
+                    end
 
                     -- Rebuild ordering + UI (force icon refresh so delete is always visible instantly)
                     RebuildOrder()
@@ -3488,9 +3495,64 @@ addBtn:SetScript("OnClick", function()
   local t = currentType
   local name
 
-  -- Bars are UI-only placeholders for now: never add them to the DB
+  -- Bar type: read the selected bar kind from the dropdown and create a DB entry
   if t == "Bar" then
-    (DEFAULT_CHAT_FRAME or ChatFrame1):AddMessage("|cff6FA8DCDoiteAuras:|r Bars are not implemented yet (coming soon).")
+    local barLabel = DA_GetDropDownText(barDropDown)
+    if not barLabel or barLabel == "" or barLabel == "Select from dropdown" then
+      (DEFAULT_CHAT_FRAME or ChatFrame1):AddMessage("|cff6FA8DCDoiteAuras:|r Please select a bar type from the dropdown.")
+      return
+    end
+
+    -- Resolve label to KindKey
+    local selectedKindKey = nil
+    if DoiteBars and DoiteBars.Kinds and DoiteBars.KindOrder then
+      local i
+      for i = 1, table.getn(DoiteBars.KindOrder) do
+        local kk = DoiteBars.KindOrder[i]
+        local kd = DoiteBars.Kinds[kk]
+        if kd and kd.label == barLabel then
+          selectedKindKey = kk
+          break
+        end
+      end
+    end
+
+    if not selectedKindKey then
+      (DEFAULT_CHAT_FRAME or ChatFrame1):AddMessage("|cff6FA8DCDoiteAuras:|r That bar type is not yet implemented.")
+      return
+    end
+
+    -- Generate DB key
+    local key, baseKey, instanceIdx = GenerateUniqueKey(barLabel, "Bar")
+    local nextOrder = table.getn(GetOrderedSpells()) + 1
+
+    DoiteAurasDB.spells[key] = {
+      order       = nextOrder,
+      type        = "Bar",
+      barType     = selectedKindKey,
+      displayName = barLabel,
+      shownName   = barLabel,
+      baseKey     = baseKey,
+      uid         = instanceIdx,
+      offsetX     = 0,
+      offsetY     = 0,
+      barWidth    = 200,
+      barHeight   = 25,
+      scale       = 1,
+      alpha       = 1,
+    }
+
+    RebuildOrder(); RefreshList(); RefreshIcons()
+    -- Create and show bar frame
+    if DoiteBars and DoiteBars.CreateOrUpdateBar then
+      local data = DoiteAurasDB.spells[key]
+      local f = DoiteBars.CreateOrUpdateBar(key, data)
+      if f then
+        DoiteBars.RefreshBar(key, data)
+        f:Show()
+      end
+    end
+    scrollFrame:SetVerticalScroll(math.max(0, listContent:GetHeight() - scrollFrame:GetHeight()))
     return
   end
 

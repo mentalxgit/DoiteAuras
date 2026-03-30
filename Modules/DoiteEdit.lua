@@ -1555,6 +1555,30 @@ end
 ----------------------------------------------------------------
 -- Conditions UI creation & wiring
 ----------------------------------------------------------------
+local function StylePlainEditBox(eb, justify)
+  if not eb then
+    return
+  end
+  eb:SetAutoFocus(false)
+  eb:SetFontObject("GameFontNormalSmall")
+  eb:SetJustifyH(justify or "LEFT")
+  if eb.SetTextInsets then
+    eb:SetTextInsets(6, 6, 0, 0)
+  end
+  if eb.SetBackdrop then
+    eb:SetBackdrop({
+      bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+      edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      tile = true,
+      tileSize = 16,
+      edgeSize = 12,
+      insets = { left = 3, right = 3, top = 3, bottom = 3 }
+    })
+    eb:SetBackdropColor(0, 0, 0, 0.85)
+    eb:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+  end
+end
+
 local function CreateConditionsUI()
   if not condFrame then
     return
@@ -1589,30 +1613,6 @@ local function CreateConditionsUI()
       pcall(UIDropDownMenu_SetWidth, width or 55, dd)
     end
     return dd
-  end
-
-  local function StylePlainEditBox(eb, justify)
-    if not eb then
-      return
-    end
-    eb:SetAutoFocus(false)
-    eb:SetFontObject("GameFontNormalSmall")
-    eb:SetJustifyH(justify or "LEFT")
-    if eb.SetTextInsets then
-      eb:SetTextInsets(6, 6, 0, 0)
-    end
-    if eb.SetBackdrop then
-      eb:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 16,
-        edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 }
-      })
-      eb:SetBackdropColor(0, 0, 0, 0.85)
-      eb:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-    end
   end
 
   local function MakeSmallEdit(name, x, y, width)

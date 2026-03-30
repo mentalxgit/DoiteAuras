@@ -575,6 +575,49 @@ local function DE_ImportPackage(pkg)
   local groupSort = DoiteAurasDB.groupSort
   local bucketDisabled = DoiteAurasDB.bucketDisabled
 
+  local function DE_DeleteExistingBucket(kind, name)
+    if not kind or not name or name == "" then
+      return
+    end
+
+    local key, data
+    for key, data in pairs(spells) do
+      if type(data) == "table" then
+        if kind == "group" and data.group == name then
+          spells[key] = nil
+        elseif kind == "category" and data.category == name then
+          spells[key] = nil
+        end
+      end
+    end
+
+    if kind == "group" then
+      groupSort[name] = nil
+    elseif kind == "category" then
+      local i
+      for i = table.getn(categoriesList), 1, -1 do
+        if categoriesList[i] == name then
+          table.remove(categoriesList, i)
+        end
+      end
+    end
+
+    bucketDisabled[name] = nil
+  end
+
+  local replaceCfg = pkg.__daReplaceExisting
+  if type(replaceCfg) == "table" then
+    local kind
+    for kind, names in pairs(replaceCfg) do
+      if type(names) == "table" then
+        local oldName
+        for oldName in pairs(names) do
+          DE_DeleteExistingBucket(kind, oldName)
+        end
+      end
+    end
+  end
+
   -- existing category names
   local existingCats = {}
   local i
@@ -1717,14 +1760,63 @@ local function DE_CreateImportFrame()
       category = {},
     }
 
+    local function DE_BarsCategoryHasBarTypeOverlap(catName)
+      if tostring(catName) ~= "BARS" then
+        return true
+      end
+
+      local dbBarTypes = {}
+      local hasDbBars = false
+      local key, data
+      for key, data in pairs((DoiteAurasDB and DoiteAurasDB.spells) or {}) do
+        if type(data) == "table"
+          and data.category == catName
+          and data.type == "Bar"
+          and data.barType
+          and data.barType ~= "" then
+          dbBarTypes[data.barType] = true
+          hasDbBars = true
+        end
+      end
+      if not hasDbBars then
+        return false
+      end
+
+      local icons = (pkg and pkg.icons) or {}
+      local i
+      for i = 1, table.getn(icons) do
+        local rec = icons[i]
+        local d = rec and rec.data
+        if d
+          and d.category == catName
+          and d.type == "Bar"
+          and d.barType
+          and d.barType ~= ""
+          and dbBarTypes[d.barType] then
+          return true
+        end
+      end
+      return false
+    end
+
     local kind, name
     for kind in pairs(sets.importAll) do
       for name in pairs(sets.importAll[kind]) do
         if sets.db[kind][name] then
-          table.insert(duplicates, {
-            kind = kind,
-            oldName = name,
-          })
+          local shouldInclude = true
+          local allowRename = true
+          if kind == "category" and tostring(name) == "BARS" then
+            shouldInclude = DE_BarsCategoryHasBarTypeOverlap(name)
+            allowRename = false
+          end
+
+          if shouldInclude then
+            table.insert(duplicates, {
+              kind = kind,
+              oldName = name,
+              allowRename = allowRename,
+            })
+          end
         else
           nonDuplicates[kind][name] = true
         end
@@ -1748,16 +1840,59 @@ local function DE_CreateImportFrame()
 
     local mapGroup = {}
     local mapCategory = {}
+    local replaceCfg = {
+      group = {},
+      category = {},
+    }
+    local dismissCfg = {
+      group = {},
+      category = {},
+    }
     local i
 
     for i = 1, table.getn(duplicates) do
       local entry = duplicates[i]
-      if entry and entry.savedName and entry.savedName ~= "" then
-        if entry.kind == "group" then
-          mapGroup[entry.oldName] = entry.savedName
-        elseif entry.kind == "category" then
-          mapCategory[entry.oldName] = entry.savedName
+      if entry then
+        if entry.replaceSelected then
+          replaceCfg[entry.kind][entry.oldName] = true
+        elseif entry.dismissed then
+          dismissCfg[entry.kind][entry.oldName] = true
+        elseif entry.savedName and entry.savedName ~= "" then
+          if entry.kind == "group" then
+            mapGroup[entry.oldName] = entry.savedName
+          elseif entry.kind == "category" then
+            mapCategory[entry.oldName] = entry.savedName
+          end
         end
+      end
+    end
+
+    -- Safety: if stale state ever marks both dismissed and replaced,
+    -- dismissal should win and the bucket should be excluded from import.
+    local kind, bucketName
+    for kind in pairs(dismissCfg) do
+      for bucketName in pairs(dismissCfg[kind]) do
+        replaceCfg[kind][bucketName] = nil
+      end
+    end
+
+    if next(replaceCfg.group) or next(replaceCfg.category) then
+      pkg.__daReplaceExisting = replaceCfg
+    else
+      pkg.__daReplaceExisting = nil
+    end
+
+    if next(dismissCfg.group) and pkg.groups then
+      local gName
+      for gName in pairs(dismissCfg.group) do
+        pkg.groups[gName] = nil
+      end
+    end
+
+    if next(dismissCfg.category) and pkg.categories then
+      local cName
+      for cName in pairs(dismissCfg.category) do
+        pkg.categories[cName] = nil
       end
     end
 
@@ -1780,17 +1915,32 @@ local function DE_CreateImportFrame()
     end
 
     local icons = pkg.icons or {}
+    local keptIcons = {}
     for i = 1, table.getn(icons) do
       local rec = icons[i]
-      if rec and rec.data then
-        if rec.data.group and mapGroup[rec.data.group] then
-          rec.data.group = mapGroup[rec.data.group]
+      if rec then
+        local skip = false
+        if rec.data then
+          if rec.data.group and dismissCfg.group[rec.data.group] then
+            skip = true
+          end
+          if rec.data.category and dismissCfg.category[rec.data.category] then
+            skip = true
+          end
         end
-        if rec.data.category and mapCategory[rec.data.category] then
-          rec.data.category = mapCategory[rec.data.category]
+
+        if not skip then
+          if rec.data and rec.data.group and mapGroup[rec.data.group] then
+            rec.data.group = mapGroup[rec.data.group]
+          end
+          if rec.data and rec.data.category and mapCategory[rec.data.category] then
+            rec.data.category = mapCategory[rec.data.category]
+          end
+          table.insert(keptIcons, rec)
         end
       end
     end
+    pkg.icons = keptIcons
 
     return pkg
   end
@@ -1945,7 +2095,9 @@ local function DE_CreateImportFrame()
       end
       local i
       for i = 1, table.getn(duplicateState.duplicates) do
-        if not duplicateState.duplicates[i].savedName then
+        if not duplicateState.duplicates[i].savedName
+          and not duplicateState.duplicates[i].replaceSelected
+          and not duplicateState.duplicates[i].dismissed then
           return false
         end
       end
@@ -2019,6 +2171,15 @@ local function DE_CreateImportFrame()
           if row.saveBtn then
             row.saveBtn:Hide()
           end
+          if row.dismissBtn then
+            row.dismissBtn:Hide()
+          end
+          if row.replaceBtn then
+            row.replaceBtn:Hide()
+          end
+          if row.lockedText then
+            row.lockedText:Hide()
+          end
           if row.savedText then
             row.savedText:Hide()
           end
@@ -2032,6 +2193,7 @@ local function DE_CreateImportFrame()
         local entry = state.duplicates[i]
         local row = {}
         local kindLabel = (entry.kind == "group") and "Group" or "Category"
+        local canRename = entry.allowRename ~= false
         local prefix = ""
         if total > 1 then
           prefix = "Match #" .. i .. " - "
@@ -2042,13 +2204,37 @@ local function DE_CreateImportFrame()
         label:SetText(prefix .. kindLabel .. ":")
         row.label = label
 
-        local input = CreateFrame("EditBox", nil, duplicateFrame.rowsContainer, "InputBoxTemplate")
+        local input = CreateFrame("EditBox", nil, duplicateFrame.rowsContainer)
         input:SetAutoFocus(false)
+        input:SetFontObject("GameFontHighlightSmall")
+        if input.SetTextInsets then
+          input:SetTextInsets(6, 6, 0, 0)
+        end
+        if input.SetBackdrop then
+          input:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+          })
+          input:SetBackdropColor(0, 0, 0, 0.85)
+          input:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+        end
         input:SetWidth(120)
         input:SetHeight(20)
         input:SetPoint("LEFT", label, "RIGHT", 8, 0)
         input:SetText(entry.oldName or "")
         row.input = input
+
+        local lockedText = duplicateFrame.rowsContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        lockedText:SetPoint("LEFT", label, "RIGHT", 8, 0)
+        lockedText:SetText(entry.oldName or "")
+        if canRename then
+          lockedText:Hide()
+        end
+        row.lockedText = lockedText
 
         local savedText = duplicateFrame.rowsContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         savedText:SetPoint("LEFT", label, "RIGHT", 8, 0)
@@ -2064,13 +2250,59 @@ local function DE_CreateImportFrame()
         saveBtn:Disable()
         row.saveBtn = saveBtn
 
+        local dismissBtn = CreateFrame("Button", nil, duplicateFrame.rowsContainer, "UIPanelButtonTemplate")
+        dismissBtn:SetWidth(52)
+        dismissBtn:SetHeight(20)
+        dismissBtn:SetPoint("LEFT", saveBtn, "RIGHT", 6, 0)
+        dismissBtn:SetText("Dismiss")
+        row.dismissBtn = dismissBtn
+
+        local replaceBtn = CreateFrame("Button", nil, duplicateFrame.rowsContainer, "UIPanelButtonTemplate")
+        replaceBtn:SetWidth(52)
+        replaceBtn:SetHeight(20)
+        replaceBtn:SetPoint("LEFT", dismissBtn, "RIGHT", 6, 0)
+        replaceBtn:SetText("Replace")
+        row.replaceBtn = replaceBtn
+
+        local function DE_ResetRowToEditable()
+          entry.savedName = nil
+          entry.replaceSelected = nil
+          entry.dismissed = nil
+          savedText:Hide()
+          if canRename then
+            input:SetText(entry.oldName or "")
+            input:Show()
+            saveBtn:Show()
+            saveBtn:Disable()
+            dismissBtn:Show()
+            lockedText:Hide()
+          else
+            lockedText:SetText(entry.oldName or "")
+            lockedText:Show()
+            input:Hide()
+            saveBtn:Hide()
+            dismissBtn:Show()
+          end
+          replaceBtn:SetText("Replace")
+          DE_UpdateDuplicateImportButton()
+        end
+
         input:SetScript("OnTextChanged", function()
           local value = this:GetText() or ""
+          if entry.savedName or entry.replaceSelected then
+            entry.savedName = nil
+            entry.replaceSelected = nil
+            entry.dismissed = nil
+            savedText:Hide()
+            dismissBtn:Show()
+            replaceBtn:SetText("Replace")
+          end
           if DE_DuplicateNameIsUnique(entry, value) then
             saveBtn:Enable()
           else
             saveBtn:Disable()
           end
+          DE_UpdateDuplicateImportButton()
         end)
 
         saveBtn:SetScript("OnClick", function()
@@ -2079,12 +2311,55 @@ local function DE_CreateImportFrame()
             return
           end
           entry.savedName = value
+          entry.replaceSelected = nil
+          entry.dismissed = nil
           input:Hide()
           saveBtn:Hide()
+          dismissBtn:Hide()
+          lockedText:Hide()
           savedText:SetText(value)
           savedText:Show()
+          replaceBtn:SetText("Regret")
           DE_UpdateDuplicateImportButton()
         end)
+
+        dismissBtn:SetScript("OnClick", function()
+          entry.savedName = nil
+          entry.replaceSelected = nil
+          entry.dismissed = true
+          input:Hide()
+          saveBtn:Hide()
+          dismissBtn:Hide()
+          lockedText:Hide()
+          savedText:SetText((entry.oldName or "") .. " [DISMISSED]")
+          savedText:Show()
+          replaceBtn:SetText("Regret")
+          DE_UpdateDuplicateImportButton()
+        end)
+
+        replaceBtn:SetScript("OnClick", function()
+          if entry.replaceSelected or entry.savedName or entry.dismissed then
+            DE_ResetRowToEditable()
+            return
+          end
+
+          entry.savedName = nil
+          entry.replaceSelected = true
+          entry.dismissed = nil
+          input:Hide()
+          saveBtn:Hide()
+          dismissBtn:Hide()
+          lockedText:Hide()
+          savedText:SetText((entry.oldName or "") .. " [REPLACED]")
+          savedText:Show()
+          replaceBtn:SetText("Regret")
+          DE_UpdateDuplicateImportButton()
+        end)
+
+        if not canRename then
+          input:Hide()
+          saveBtn:Hide()
+        end
 
         table.insert(duplicateFrame.rowWidgets, row)
         y = y - 24

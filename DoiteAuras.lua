@@ -548,12 +548,36 @@ settingsBtn:SetScript("OnClick", function()
     end
 end)
 
+local function DA_StyleRowEditBox(editBox, justify)
+    if not editBox then
+        return
+    end
+    editBox:SetAutoFocus(false)
+    editBox:SetFontObject("GameFontNormalSmall")
+    editBox:SetJustifyH(justify or "LEFT")
+    if editBox.SetTextInsets then
+        editBox:SetTextInsets(6, 6, 0, 0)
+    end
+    if editBox.SetBackdrop then
+        editBox:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 }
+        })
+        editBox:SetBackdropColor(0, 0, 0, 0.85)
+        editBox:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    end
+end
+
 -- Input box + Add
-local input = CreateFrame("EditBox", "DoiteAurasInput", frame, "InputBoxTemplate")
+local input = CreateFrame("EditBox", "DoiteAurasInput", frame)
 input:SetWidth(240)
 input:SetHeight(20)
 input:SetPoint("TOPLEFT", intro, "TOPLEFT", 5, -15)
-input:SetAutoFocus(false)
+DA_StyleRowEditBox(input, "LEFT")
 
 local addBtn = CreateFrame("Button", "DoiteAurasAddBtn", frame, "UIPanelButtonTemplate")
 addBtn:SetWidth(60)
@@ -3233,9 +3257,9 @@ local function RefreshList()
                     btn.downBtn:ClearAllPoints()
                     btn.downBtn:SetPoint("RIGHT", btn.renameBtn, "LEFT", -5, 0)
 
-                    btn.renameInput = CreateFrame("EditBox", nil, btn, "InputBoxTemplate")
+                    btn.renameInput = CreateFrame("EditBox", nil, btn)
                     btn.renameInput:SetWidth(120); btn.renameInput:SetHeight(18)
-                    btn.renameInput:SetAutoFocus(false)
+                    DA_StyleRowEditBox(btn.renameInput, "LEFT")
                     -- Rename-controls row anchor
                     btn.renameInput:SetPoint("TOPLEFT", btn, "TOPLEFT", 15, -49)
 

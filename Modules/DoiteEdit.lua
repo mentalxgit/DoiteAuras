@@ -1591,27 +1591,47 @@ local function CreateConditionsUI()
     return dd
   end
 
+  local function StylePlainEditBox(eb, justify)
+    if not eb then
+      return
+    end
+    eb:SetAutoFocus(false)
+    eb:SetFontObject("GameFontNormalSmall")
+    eb:SetJustifyH(justify or "LEFT")
+    if eb.SetTextInsets then
+      eb:SetTextInsets(6, 6, 0, 0)
+    end
+    if eb.SetBackdrop then
+      eb:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+      })
+      eb:SetBackdropColor(0, 0, 0, 0.85)
+      eb:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    end
+  end
+
   local function MakeSmallEdit(name, x, y, width)
     local parent = _Parent()
-    local eb = CreateFrame("EditBox", name, parent, "InputBoxTemplate")
+    local eb = CreateFrame("EditBox", name, parent)
     eb:SetWidth(width or 44)
     eb:SetHeight(18)
     eb:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-    eb:SetAutoFocus(false)
-    eb:SetJustifyH("CENTER")
-    eb:SetFontObject("GameFontNormalSmall")
+    StylePlainEditBox(eb, "CENTER")
     return eb
   end
 
   local function MakeMiniFadeSlider(name, x, y)
     local parent = _Parent()
-    local eb = CreateFrame("EditBox", name, parent, "InputBoxTemplate")
+    local eb = CreateFrame("EditBox", name, parent)
     eb:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     eb:SetWidth(26)
     eb:SetHeight(16)
-    eb:SetAutoFocus(false)
-    eb:SetJustifyH("CENTER")
-    eb:SetFontObject("GameFontNormalSmall")
+    StylePlainEditBox(eb, "CENTER")
     eb:SetNumeric(true)
 
     local pct = eb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -2142,22 +2162,18 @@ local function CreateConditionsUI()
 
   condFrame.cond_aura_text_time = MakeCheck("DoiteCond_Aura_TextTime", "Icon text: Time remaining", 0, row11_y - 11)
   condFrame.cond_aura_text_stack = MakeCheck("DoiteCond_Aura_TextStack", "Icon text: Stacks", 0, row12_y+3)
-  condFrame.cond_aura_text_time_override = CreateFrame("EditBox", "DoiteCond_Aura_TextTimeOverride", _Parent(), "InputBoxTemplate")
+  condFrame.cond_aura_text_time_override = CreateFrame("EditBox", "DoiteCond_Aura_TextTimeOverride", _Parent())
   condFrame.cond_aura_text_time_override:SetWidth(100)
   condFrame.cond_aura_text_time_override:SetHeight(18)
   condFrame.cond_aura_text_time_override:SetPoint("TOPLEFT", _Parent(), "TOPLEFT", 165, row11_y - 11)
-  condFrame.cond_aura_text_time_override:SetAutoFocus(false)
-  condFrame.cond_aura_text_time_override:SetJustifyH("LEFT")
-  condFrame.cond_aura_text_time_override:SetFontObject("GameFontNormalSmall")
+  StylePlainEditBox(condFrame.cond_aura_text_time_override, "LEFT")
   condFrame.cond_aura_text_time_override:Hide()
 
-  condFrame.cond_aura_text_stack_override = CreateFrame("EditBox", "DoiteCond_Aura_TextStackOverride", _Parent(), "InputBoxTemplate")
+  condFrame.cond_aura_text_stack_override = CreateFrame("EditBox", "DoiteCond_Aura_TextStackOverride", _Parent())
   condFrame.cond_aura_text_stack_override:SetWidth(100)
   condFrame.cond_aura_text_stack_override:SetHeight(18)
   condFrame.cond_aura_text_stack_override:SetPoint("TOPLEFT", _Parent(), "TOPLEFT", 165, row12_y+3)
-  condFrame.cond_aura_text_stack_override:SetAutoFocus(false)
-  condFrame.cond_aura_text_stack_override:SetJustifyH("LEFT")
-  condFrame.cond_aura_text_stack_override:SetFontObject("GameFontNormalSmall")
+  StylePlainEditBox(condFrame.cond_aura_text_stack_override, "LEFT")
   condFrame.cond_aura_text_stack_override:Hide()
 
   condFrame.cond_aura_text_override_note = _Parent():CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -2408,13 +2424,11 @@ local function CreateConditionsUI()
   condFrame.cond_item_remaining_val:Hide()
   condFrame.cond_item_remaining_val_enter:Hide()
   condFrame.cond_item_text_time = MakeCheck("DoiteCond_Item_TextTime", "Icon text: Time remaining", 0, row12_y - 25)
-  condFrame.cond_item_text_time_override = CreateFrame("EditBox", "DoiteCond_Item_TextTimeOverride", _Parent(), "InputBoxTemplate")
+  condFrame.cond_item_text_time_override = CreateFrame("EditBox", "DoiteCond_Item_TextTimeOverride", _Parent())
   condFrame.cond_item_text_time_override:SetWidth(100)
   condFrame.cond_item_text_time_override:SetHeight(18)
   condFrame.cond_item_text_time_override:SetPoint("TOPLEFT", _Parent(), "TOPLEFT", 165, row12_y - 25)
-  condFrame.cond_item_text_time_override:SetAutoFocus(false)
-  condFrame.cond_item_text_time_override:SetJustifyH("LEFT")
-  condFrame.cond_item_text_time_override:SetFontObject("GameFontNormalSmall")
+  StylePlainEditBox(condFrame.cond_item_text_time_override, "LEFT")
   condFrame.cond_item_text_time_override:Hide()
 
   condFrame.cond_item_text_override_note = _Parent():CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -8393,12 +8407,27 @@ do
     row.glowCB = CreateMiniCheck("Glow")
     row.greyCB = CreateMiniCheck("Grey")
     row.fadeCB = CreateMiniCheck("Fade")
-    row.fadeSlider = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+    row.fadeSlider = CreateFrame("EditBox", nil, row)
     row.fadeSlider:SetWidth(24)
     row.fadeSlider:SetHeight(16)
     row.fadeSlider:SetAutoFocus(false)
     row.fadeSlider:SetJustifyH("CENTER")
     row.fadeSlider:SetFontObject("GameFontNormalSmall")
+    if row.fadeSlider.SetTextInsets then
+      row.fadeSlider:SetTextInsets(6, 6, 0, 0)
+    end
+    if row.fadeSlider.SetBackdrop then
+      row.fadeSlider:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 }
+      })
+      row.fadeSlider:SetBackdropColor(0, 0, 0, 0.85)
+      row.fadeSlider:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    end
     row.fadeSlider:SetNumeric(true)
     row.fadeSliderPct = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.fadeSliderPct:SetText("|cffffd000%|r")
@@ -11875,12 +11904,11 @@ function DoiteConditions_Show(key)
     _G[condFrame.spacingSlider:GetName() .. 'High']:SetText("100")
     _G[condFrame.spacingSlider:GetName() .. 'Text']:SetText("")
 
-    condFrame.spacingEdit = CreateFrame("EditBox", "DoiteConditions_SpacingEdit", condFrame, "InputBoxTemplate")
+    condFrame.spacingEdit = CreateFrame("EditBox", "DoiteConditions_SpacingEdit", condFrame)
     condFrame.spacingEdit:SetWidth(30)
     condFrame.spacingEdit:SetHeight(18)
     condFrame.spacingEdit:SetPoint("LEFT", condFrame.spacingSlider, "RIGHT", 10, 0)
-    condFrame.spacingEdit:SetAutoFocus(false)
-    condFrame.spacingEdit:SetFontObject("GameFontNormalSmall")
+    StylePlainEditBox(condFrame.spacingEdit, "CENTER")
     condFrame.spacingEdit:SetMaxLetters(3)
     condFrame.spacingEdit:Hide()
 
@@ -12118,14 +12146,12 @@ function DoiteConditions_Show(key)
       end
 
       -- tiny EditBox below slider
-      local eb = CreateFrame("EditBox", name .. "_EditBox", condFrame, "InputBoxTemplate")
+      local eb = CreateFrame("EditBox", name .. "_EditBox", condFrame)
       eb:SetWidth(33);
       eb:SetHeight(18)
       eb:SetPoint("TOP", s, "BOTTOM", 3, -8)
-      eb:SetAutoFocus(false)
       eb:SetText("0")
-      eb:SetJustifyH("CENTER")
-      eb:SetFontObject("GameFontNormalSmall")
+      StylePlainEditBox(eb, "CENTER")
       eb.slider = s
       eb._updating = false
 

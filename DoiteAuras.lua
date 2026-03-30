@@ -590,6 +590,21 @@ UIDropDownMenu_SetWidth(230, itemDropDown)
 UIDropDownMenu_SetText("Select from dropdown", itemDropDown)
 itemDropDown:Hide()
 
+local function DA_HookDropDownButtonOnClick(dd, fn)
+    if not dd or not fn or not dd.GetName then return end
+    local btn = getglobal(dd:GetName() .. "Button")
+    if not btn or btn._daRebuildHooked then return end
+    btn._daRebuildHooked = true
+
+    local prev = btn.GetScript and btn:GetScript("OnClick")
+    btn:SetScript("OnClick", function()
+        fn()
+        if prev then
+            prev()
+        end
+    end)
+end
+
 -- Force the item dropdown text to be left-aligned
 local itemText  = getglobal("DoiteAurasItemDropDownText")
 local itemMiddle = getglobal("DoiteAurasItemDropDownMiddle")
@@ -778,6 +793,31 @@ local DA_AbilityDropdownPassiveAllow = {
 }
 _G["DA_AbilityDropdownPassiveAllow"] = DA_AbilityDropdownPassiveAllow
 
+-- Add non-"on use" items that should still show in item dropdowns
+local DA_ItemDropdownAllow = {
+    ["Infernal Stone"] = true,
+    ["Demonic Figurine"] = true,
+    ["Arcane Powder"] = true,
+    ["Wild Berries"] = true,
+    ["Holy Candle"] = true,
+    ["Sacred Candle"] = true,
+    ["Ankh"] = true,
+    ["Rune of Teleportation"] = true,
+    ["Rune of Portals"] = true,
+    ["Symbol of Divinity"] = true,
+    ["Maple Seed"] = true,
+    ["Stranglethorn Seed"] = true,
+    ["Ashwood Seed"] = true,
+    ["Hornbeam Seed"] = true,
+    ["Symbol of Kings"] = true,
+    ["Bright Dream Shard"] = true,
+    ["Flash Powder"] = true,
+    ["Blinding Powder"] = true,
+    ["Ironwood Seed"] = true,
+    ["Wild Thornroot"] = true,
+}
+_G["DA_ItemDropdownAllow"] = DA_ItemDropdownAllow
+
 local function DA_RebuildAbilityDropDown()
     if not abilityDropDown then return end
 
@@ -875,6 +915,11 @@ local function DA_AddItemOption(name)
     DA_ItemOptions[n + 1] = name
 end
 
+local function DA_IsAllowlistedItemName(itemName)
+    local allow = _G["DA_ItemDropdownAllow"]
+    return (allow and itemName and allow[itemName] == true) and true or false
+end
+
 -- Check current DoiteAurasTooltip for a line that looks like "Use..." or "consume..."
 local function DA_TooltipHasUseOrConsume()
     local i
@@ -906,7 +951,7 @@ local function DA_ScanEquippedUsable()
 
             local nameFS = DoiteAurasTooltipTextLeft1
             local itemName = nameFS and nameFS:GetText()
-            if itemName and DA_TooltipHasUseOrConsume() then
+            if itemName and (DA_TooltipHasUseOrConsume() or DA_IsAllowlistedItemName(itemName)) then
                 DA_AddItemOption(itemName)
             end
         end
@@ -929,7 +974,7 @@ local function DA_ScanBagUsable()
 
                     local nameFS = DoiteAurasTooltipTextLeft1
                     local itemName = nameFS and nameFS:GetText()
-                    if itemName and DA_TooltipHasUseOrConsume() then
+                    if itemName and (DA_TooltipHasUseOrConsume() or DA_IsAllowlistedItemName(itemName)) then
                         DA_AddItemOption(itemName)
                     end
                 end
@@ -1132,6 +1177,8 @@ local function DA_RebuildItemDropDown()
     -- Reset shown text each time
     UIDropDownMenu_SetText("Select from dropdown", itemDropDown)
 end
+
+DA_HookDropDownButtonOnClick(itemDropDown, DA_RebuildItemDropDown)
 
 -- Helper to read current dropdown text
 local function DA_GetDropDownText(dd)

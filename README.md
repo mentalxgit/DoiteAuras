@@ -10,8 +10,18 @@ Visit the original DoiteAuras by Doite: https://github.com/Player-Doite/DoiteAur
 
 _Please respect the license note._
 
+## Shared exported builds (for inspiration or use)
+- Reddit / DoiteAuras - Share your UI: **[LINK](https://www.reddit.com/r/DoiteAuras/comments/1r8w4zf/doiteauras_share_your_ui/)**
+
+_To import - copy the text, press the import button inside DoiteAuras in-game and paste._
+
+## Quick start
+- Use the **minimap icon** <img width="32" height="32" alt="doiteauras-icon" src="https://github.com/user-attachments/assets/908afec6-0de1-4a4a-8081-198cac49e937" />
+- `/da` or `/doite` or `/doiteauras`
+
 ## Features
 - Able to track an ability, buff, debuff and/or item (on player, target or pet)
+- Create customizable health- or power-bars (mana/energy/rage)
 - Match generically by entering a name or uniquely via SpellID
 - Player buffs/debuffs visible beyond the visible cap (32)
 - Import/export functions to share UI profiles
@@ -22,20 +32,11 @@ _Please respect the license note._
 - Custom animations for "soon off CD" (abilities)
 - Custom dynamic and static grouping system, collapsing towards a relative point or fixed point
 - Custom condition block input, for unlimited coding freedom
-- More to come.. _(bars, mouseover support, more features)_
+- More to come.. _(mouseover support, target beyond buffcap support, more features)_
 
 ## Tutorial & How-to instructions
 [![Watch the video](https://img.youtube.com/vi/L049puyYDV8/maxresdefault.jpg)](https://youtu.be/L049puyYDV8)
 _Timestamps are available in the description._
-
-## Quick start
-- Use the **minimap icon** <img width="32" height="32" alt="doiteauras-icon" src="https://github.com/user-attachments/assets/908afec6-0de1-4a4a-8081-198cac49e937" />
-- `/da` or `/doite` or `/doiteauras`
-
-## Shared exported builds (for inspiration or use)
-- Reddit / DoiteAuras - Share your UI: **[LINK](https://www.reddit.com/r/DoiteAuras/comments/1r8w4zf/doiteauras_share_your_ui/)**
-
-_To import - copy the text, press the import button inside DoiteAuras in-game and paste._
 
 ## Installation
 1.  Navigate to your World of Warcraft installation folder.

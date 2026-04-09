@@ -20,6 +20,16 @@ if DoiteAurasDB.showtooltip == nil then
 end
 DoiteAuras = DoiteAuras or {}
 
+if _G == nil and type(getfenv) == "function" then
+  _G = getfenv(0)
+end
+
+if UIDropDownMenu_CreateInfo == nil then
+  function UIDropDownMenu_CreateInfo()
+    return {}
+  end
+end
+
 local renameState
 local DA_GetSpellIdShownName
 local DA_ClearRenameState

@@ -650,6 +650,74 @@ local _FlameShockSpellIdsList = nil -- array of spellIds, or nil if not tracked
 local _RipSpellIdsList = nil  -- array
 local _RakeSpellIdsList = nil -- array
 
+local function _BuildOnlyMineDebuffSpellIdListByNorm(normName)
+  local seen = {}
+  local list = {}
+  local n = 0
+
+  local function addSpellId(sid)
+    sid = tonumber(sid) or 0
+    if sid <= 0 or seen[sid] then
+      return
+    end
+    seen[sid] = true
+    n = n + 1
+    list[n] = sid
+  end
+
+  do
+    local e = TrackedByNameNorm[normName]
+    if e and e.onlyMine == true and e.kind == "Debuff" and type(e.spellIds) == "table" then
+      local sid
+      for sid in pairs(e.spellIds) do
+        addSpellId(sid)
+      end
+    end
+  end
+
+  do
+    local sid, e
+    for sid, e in pairs(TrackedBySpellId) do
+      if e and e.onlyMine == true and e.kind == "Debuff" then
+        local n0 = _GetSpellNameRank(tonumber(sid) or 0)
+        if _NormSpellName(n0) == normName then
+          addSpellId(sid)
+        end
+      end
+    end
+  end
+
+  if n > 0 then
+    return list
+  end
+  return nil
+end
+
+local function _RebuildFlameShockSpellIdsList()
+  _FlameShockSpellIdsList = _BuildOnlyMineDebuffSpellIdListByNorm("flame shock")
+end
+
+local function _RebuildRipRakeSpellIdLists()
+  _RipSpellIdsList = _BuildOnlyMineDebuffSpellIdListByNorm("rip")
+  _RakeSpellIdsList = _BuildOnlyMineDebuffSpellIdListByNorm("rake")
+end
+
+local function _HasTrackedJudgementDebuff()
+  if _BuildOnlyMineDebuffSpellIdListByNorm("judgement of the crusader") then
+    return true
+  end
+  if _BuildOnlyMineDebuffSpellIdListByNorm("judgement of light") then
+    return true
+  end
+  if _BuildOnlyMineDebuffSpellIdListByNorm("judgement of wisdom") then
+    return true
+  end
+  if _BuildOnlyMineDebuffSpellIdListByNorm("judgement of justice") then
+    return true
+  end
+  return false
+end
+
 local function _IsBadGuid(g)
   return (not g) or g == "" or g == "0x000000000" or g == "0x0000000000000000"
 end
@@ -1052,10 +1120,7 @@ function DoiteTrack:_RecomputeEventNeeds()
 
   local needMB = false
   if _IsPlayerShaman then
-    local fs = TrackedByNameNorm["flame shock"]
-    if fs and fs.onlyMine == true and fs.kind == "Debuff" then
-      needMB = true
-    end
+    needMB = (type(_FlameShockSpellIdsList) == "table")
   end
 
   local needCarnage = false
@@ -1072,33 +1137,7 @@ function DoiteTrack:_RecomputeEventNeeds()
   ----------------------------------------------------------------
   local palTracked = false
   if _G["DoiteTrack_IsPaladin"] == true then
-    local e
-
-    e = TrackedByNameNorm["judgement of the crusader"]
-    if e and e.onlyMine == true and e.kind == "Debuff" then
-      palTracked = true
-    end
-
-    if not palTracked then
-      e = TrackedByNameNorm["judgement of light"]
-      if e and e.onlyMine == true and e.kind == "Debuff" then
-        palTracked = true
-      end
-    end
-
-    if not palTracked then
-      e = TrackedByNameNorm["judgement of wisdom"]
-      if e and e.onlyMine == true and e.kind == "Debuff" then
-        palTracked = true
-      end
-    end
-
-    if not palTracked then
-      e = TrackedByNameNorm["judgement of justice"]
-      if e and e.onlyMine == true and e.kind == "Debuff" then
-        palTracked = true
-      end
-    end
+    palTracked = _HasTrackedJudgementDebuff()
   end
 
   _G["DoiteTrack_PalJ_Tracked"] = (palTracked and true or false)
@@ -1168,66 +1207,10 @@ function DoiteTrack:_OnDoiteAurasConfigChanged()
   self:RebuildWatchList()
 
   -- Rebuild Flame Shock spellId list cache (used by Molten Blast special case)
-  _FlameShockSpellIdsList = nil
-  do
-    local fs = TrackedByNameNorm["flame shock"]
-    if fs and fs.onlyMine == true and fs.kind == "Debuff" and type(fs.spellIds) == "table" then
-      local list = {}
-      local n = 0
-      local sid
-      for sid in pairs(fs.spellIds) do
-        sid = tonumber(sid) or 0
-        if sid > 0 then
-          n = n + 1
-          list[n] = sid
-        end
-      end
-      if n > 0 then
-        _FlameShockSpellIdsList = list
-      end
-    end
-  end
+  _RebuildFlameShockSpellIdsList()
 
   -- Rebuild Rip/Rake spellId lists (used by Carnage refresh)
-  _RipSpellIdsList = nil
-  do
-    local e = TrackedByNameNorm["rip"]
-    if e and e.onlyMine == true and e.kind == "Debuff" and type(e.spellIds) == "table" then
-      local list = {}
-      local n = 0
-      local sid
-      for sid in pairs(e.spellIds) do
-        sid = tonumber(sid) or 0
-        if sid > 0 then
-          n = n + 1
-          list[n] = sid
-        end
-      end
-      if n > 0 then
-        _RipSpellIdsList = list
-      end
-    end
-  end
-
-  _RakeSpellIdsList = nil
-  do
-    local e = TrackedByNameNorm["rake"]
-    if e and e.onlyMine == true and e.kind == "Debuff" and type(e.spellIds) == "table" then
-      local list = {}
-      local n = 0
-      local sid
-      for sid in pairs(e.spellIds) do
-        sid = tonumber(sid) or 0
-        if sid > 0 then
-          n = n + 1
-          list[n] = sid
-        end
-      end
-      if n > 0 then
-        _RakeSpellIdsList = list
-      end
-    end
-  end
+  _RebuildRipRakeSpellIdLists()
 
   self:_RecomputeEventNeeds()
   self:_ApplyEventRegistration()
@@ -1280,66 +1263,10 @@ function DoiteTrack:_OnPlayerLogin()
     self:RebuildWatchList()
 
     -- Rebuild Flame Shock spellId list cache (used by Molten Blast special case)
-    _FlameShockSpellIdsList = nil
-    do
-      local fs = TrackedByNameNorm["flame shock"]
-      if fs and fs.onlyMine == true and fs.kind == "Debuff" and type(fs.spellIds) == "table" then
-        local list = {}
-        local n = 0
-        local sid
-        for sid in pairs(fs.spellIds) do
-          sid = tonumber(sid) or 0
-          if sid > 0 then
-            n = n + 1
-            list[n] = sid
-          end
-        end
-        if n > 0 then
-          _FlameShockSpellIdsList = list
-        end
-      end
-    end
+    _RebuildFlameShockSpellIdsList()
 
     -- Rebuild Rip/Rake spellId lists (used by Carnage refresh)
-    _RipSpellIdsList = nil
-    do
-      local e = TrackedByNameNorm["rip"]
-      if e and e.onlyMine == true and e.kind == "Debuff" and type(e.spellIds) == "table" then
-        local list = {}
-        local n = 0
-        local sid
-        for sid in pairs(e.spellIds) do
-          sid = tonumber(sid) or 0
-          if sid > 0 then
-            n = n + 1
-            list[n] = sid
-          end
-        end
-        if n > 0 then
-          _RipSpellIdsList = list
-        end
-      end
-    end
-
-    _RakeSpellIdsList = nil
-    do
-      local e = TrackedByNameNorm["rake"]
-      if e and e.onlyMine == true and e.kind == "Debuff" and type(e.spellIds) == "table" then
-        local list = {}
-        local n = 0
-        local sid
-        for sid in pairs(e.spellIds) do
-          sid = tonumber(sid) or 0
-          if sid > 0 then
-            n = n + 1
-            list[n] = sid
-          end
-        end
-        if n > 0 then
-          _RakeSpellIdsList = list
-        end
-      end
-    end
+    _RebuildRipRakeSpellIdLists()
   end
 
   -- Always refresh talent caches on LOGIN + ENTERING_WORLD (cheap; no polling).
@@ -2171,6 +2098,41 @@ function DoiteTrack:_OnAuraNPEvent()
           a.fullDur = secRounded
           a.cp = cp or 0
           a.isDebuff = (entry.kind == "Debuff")
+
+          -- Paladin SC overflow fallback:
+          -- If *_ADDED_* is suppressed by aura cap, still arm active judgement refresh state.
+          if _G["DoiteTrack_IsPaladin"] == true and _G["DoiteTrack_PalJ_Tracked"] == true and entry.kind == "Debuff" then
+            local token = nil
+            if spellNameNorm == "judgement of the crusader" then
+              token = "crusader"
+            elseif spellNameNorm == "judgement of light" then
+              token = "light"
+            elseif spellNameNorm == "judgement of wisdom" then
+              token = "wisdom"
+            elseif spellNameNorm == "judgement of justice" then
+              token = "justice"
+            end
+
+            if token then
+              local pj = _G["DoiteTrack_PalJ"]
+              if type(pj) ~= "table" then
+                pj = {}
+                _G["DoiteTrack_PalJ"] = pj
+              end
+
+              pj.mode = true
+              pj.sealToken = token
+              pj.activeTargetGuid = targetGuid
+              pj.activeSpellId = spellId
+              pj.activeDur = 10
+              pj.pendingTargetGuid = nil
+              pj.pendingToken = nil
+              pj.pendingExpiresAt = nil
+
+              self:_RecomputeEventNeeds()
+              self:_ApplyEventRegistration()
+            end
+          end
 
           t[targetGuid] = nil
           return

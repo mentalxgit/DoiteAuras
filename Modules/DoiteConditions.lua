@@ -1164,89 +1164,91 @@ local function _ScanPlayerItemInstances(data)
   local firstBagBag = nil
   local firstBagSlot = nil
   local eqCount, bagCount = 0, 0
+  local nameCache = nil
+  local function _Matches(itemId)
+    if not itemId then
+      return false
+    end
+    if expectedId then
+      return itemId == expectedId
+    end
+    if not expectedName or expectedName == "" then
+      return false
+    end
+    if not nameCache then
+      nameCache = {}
+    end
+    local nm = nameCache[itemId]
+    if nm == nil then
+      nm = GetItemInfo and GetItemInfo(itemId) or false
+      nameCache[itemId] = nm
+    end
+    return (nm and nm == expectedName) and true or false
+  end
 
-  -- Equipped slots (1..19 is enough; trinkets/weapons are in here)
-  local slot = 1
-  while slot <= 19 do
-    local link = GetInventoryItemLink("player", slot)
-    if link then
-      local id, name = nil, nil
-      local match = false
-      if expectedId then
-        _, _, id = str_find(link, "item:(%d+)")
-        if id then
-          match = (tonumber(id) == expectedId)
-        end
-      else
-        id, name = _ParseItemLink(link)
-        if expectedName and name then
-          match = (name == expectedName)
-        end
-      end
-      if match then
+  local bag, slot = nil, nil
+  if FindPlayerItemSlot then
+    if expectedId then
+      bag, slot = FindPlayerItemSlot(expectedId)
+    elseif expectedName and expectedName ~= "" then
+      bag, slot = FindPlayerItemSlot(expectedName)
+    end
+  end
+  if slot then
+    if bag == nil then
+      hasEquipped = true
+      firstEquippedSlot = slot
+    elseif bag >= 0 and bag <= 4 then
+      hasBag = true
+      firstBagBag = bag
+      firstBagSlot = slot
+    end
+  end
+
+  local eq = GetEquippedItems and GetEquippedItems("player")
+  if eq then
+    local eslot, itemInfo
+    for eslot, itemInfo in pairs(eq) do
+      local itemId = itemInfo and itemInfo.itemId
+      if _Matches(itemId) then
         hasEquipped = true
         if not firstEquippedSlot then
-          firstEquippedSlot = slot
+          firstEquippedSlot = eslot
         end
-
-        -- count stack size / charges for this equipped item
-        local ccount = 1
-        if GetInventoryItemCount then
-          local n = GetInventoryItemCount("player", slot)
-          if n and n > 0 then
-            ccount = n
-          end
+        local ccount = tonumber(itemInfo.stackCount) or 1
+        if ccount <= 0 then
+          ccount = 1
         end
         eqCount = eqCount + ccount
       end
     end
-    slot = slot + 1
   end
 
-  -- Bags 0..4
-  local bag = 0
-  while bag <= 4 do
-    local numSlots = GetContainerNumSlots and GetContainerNumSlots(bag)
-    if numSlots and numSlots > 0 then
-      local bslot = 1
-      while bslot <= numSlots do
-        local link = GetContainerItemLink(bag, bslot)
-        if link then
-          local id, name = nil, nil
-          local match = false
-          if expectedId then
-            _, _, id = str_find(link, "item:(%d+)")
-            if id then
-              match = (tonumber(id) == expectedId)
-            end
-          else
-            id, name = _ParseItemLink(link)
-            if expectedName and name then
-              match = (name == expectedName)
-            end
-          end
-          if match then
+  local bags = GetBagItems and GetBagItems()
+  if bags then
+    local b = 0
+    while b <= 4 do
+      local bagData = bags[b]
+      if bagData then
+        local bslot, itemInfo
+        for bslot, itemInfo in pairs(bagData) do
+          local itemId = itemInfo and itemInfo.itemId
+          if _Matches(itemId) then
             hasBag = true
-            if (not firstBagBag) then
-              firstBagBag = bag
+            if firstBagBag == nil then
+              firstBagBag = b
               firstBagSlot = bslot
             end
-
-            -- count items in this bag slot
-            local ccount = 1
-            if GetContainerItemInfo then
-              local _, n = GetContainerItemInfo(bag, bslot)
-              if n and n > 0 then
-                ccount = n
-              end
+            local ccount = tonumber(itemInfo.stackCount) or 1
+            if ccount <= 0 then
+              ccount = 1
             end
             bagCount = bagCount + ccount
           end
         end
-        bslot = bslot + 1
       end
+      b = b + 1
     end
-    bag = bag + 1
   end
 
   -- Store in cache (reusing bagLoc table)
@@ -1293,8 +1295,9 @@ local function _GetInventorySlotState(slot)
   if not slot then
     return false, false, 0, 0, false
   end
-  local link = GetInventoryItemLink("player", slot)
-  if not link then
+  local info = GetEquippedItem and GetEquippedItem("player", slot)
+  local itemId = info and info.itemId
+  if not itemId then
     return false, false, 0, 0, false
   end
 
@@ -1320,19 +1323,13 @@ local function _GetInventorySlotState(slot)
     DoiteConditions._itemUseCacheN = 0
   end
 
-  local cacheKey = nil
-  local _, _, idStr = str_find(link, "item:(%d+)")
-  if idStr then
-    cacheKey = tonumber(idStr)
-  else
-    cacheKey = link
-  end
+  local cacheKey = itemId
 
   local isUse = useCache[cacheKey]
   if isUse == nil then
     _EnsureTooltip()
     DoiteConditionsTooltip:ClearLines()
-    DoiteConditionsTooltip:SetInventoryItem("player", slot)
+    DoiteConditionsTooltip:SetHyperlink("item:" .. tostring(itemId))
 
     isUse = false
     local i = 1
@@ -1435,7 +1432,8 @@ local function _EvaluateItemCoreState(data, c)
       local idx = _SlotIndexForName(invSlotName)
       local hasItem, onCd, rem, dur
       if invSlotName == "AMMO" then
-        hasItem = (GetInventoryItemTexture("player", ((GetInventorySlotInfo and GetInventorySlotInfo("AmmoSlot")) or INV_SLOT_AMMO)) ~= nil)
+        local ammoId = GetAmmo and GetAmmo() or nil
+        hasItem = (ammoId ~= nil)
         onCd = false
         rem = 0
         dur = 0
@@ -1893,13 +1891,12 @@ local function _EvaluateItemCoreState(data, c)
       else
         local slotCount
         if invSlotName == "AMMO" then
-          local ammoSlot = (GetInventorySlotInfo and GetInventorySlotInfo("AmmoSlot")) or INV_SLOT_AMMO
-          local ok, cnt = pcall(GetInventoryItemCount, "player", ammoSlot)
-          if ok and cnt then
-            slotCount = cnt or 0
-          else
-            slotCount = 0
+          local cnt = 0
+          if GetAmmo then
+            local _, c = GetAmmo()
+            cnt = c or 0
           end
+          slotCount = tonumber(cnt) or 0
           if slotCount < 0 then
             slotCount = 0
           end
@@ -1984,8 +1981,8 @@ local function _EvaluateItemCoreState(data, c)
   if kind and loc then
     local hasItem, onCd, rem, dur
     if kind == "inv" then
-      local link = GetInventoryItemLink("player", loc)
-      hasItem = (link ~= nil)
+      local eqInfo = GetEquippedItem and GetEquippedItem("player", loc)
+      hasItem = (eqInfo and eqInfo.itemId) and true or false
       local start, dur0, enable = GetInventoryItemCooldown("player", loc)
       if start and dur0 and start > 0 and dur0 > DOITE_ITEM_CD_IGNORE then
 
@@ -2001,8 +1998,8 @@ local function _EvaluateItemCoreState(data, c)
         dur = dur0 or 0
       end
     else
-      local link = GetContainerItemLink(loc.bag, loc.slot)
-      hasItem = (link ~= nil)
+      local bInfo = GetBagItem and GetBagItem(loc.bag, loc.slot)
+      hasItem = (bInfo and bInfo.itemId) and true or false
       local start, dur0, enable = GetContainerItemCooldown(loc.bag, loc.slot)
       if start and dur0 and start > 0 and dur0 > DOITE_ITEM_CD_IGNORE then
 
@@ -7814,10 +7811,7 @@ eventFrame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 eventFrame:RegisterEvent("SPELLS_CHANGED")
 eventFrame:RegisterEvent("UNIT_HEALTH")
 eventFrame:RegisterEvent("PLAYER_COMBO_POINTS")
-eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-eventFrame:RegisterEvent("BAG_UPDATE")
-eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
-eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
+eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED_GUID")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 
@@ -7923,40 +7917,11 @@ eventFrame:SetScript("OnEvent", function()
   elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
     dirty_ability, dirty_aura = true, true
 
-  elseif event == "PLAYER_EQUIPMENT_CHANGED" then
-    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+  elseif event == "UNIT_INVENTORY_CHANGED_GUID" then
+    if arg2 == 1 and DoiteConditions and DoiteConditions._hasAnyItemLogic then
       if _G.DoiteConditions_ClearTrinketFirstMemory then
         _G.DoiteConditions_ClearTrinketFirstMemory()
       end
-      if _InvalidateItemScanCache then
-        _InvalidateItemScanCache()
-      end
-      dirty_ability = true
-      dirty_aura = true
-    end
-
-  elseif event == "BAG_UPDATE_COOLDOWN" then
-    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      if GetTime() >= (DoiteConditions._daLastBagCooldownDirtyAt or 0) then
-        dirty_ability = true
-        dirty_aura = true
-        DoiteConditions._daLastBagCooldownDirtyAt = GetTime() + 0.10
-      end
-    end
-
-  elseif event == "BAG_UPDATE" then
-    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      -- Keep item whereabouts/counts exact when stacks split/merge or the last
-      -- item leaves a bag slot. Throttling this can miss the final state flip
-      -- (bag -> missing) and briefly hide/show wrong icon state.
-      if _InvalidateItemScanCache then
-        _InvalidateItemScanCache()
-      end
-      dirty_ability = true
-    end
-
-  elseif event == "UNIT_INVENTORY_CHANGED" then
-    if arg1 == "player" and DoiteConditions and DoiteConditions._hasAnyItemLogic then
       if _InvalidateItemScanCache then
         _InvalidateItemScanCache()
       end
@@ -7976,6 +7941,7 @@ eventFrame:SetScript("OnEvent", function()
       end
 
       dirty_ability = true
+      dirty_aura = true
     end
 
   elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then

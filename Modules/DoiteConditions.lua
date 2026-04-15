@@ -1089,19 +1089,18 @@ end
 -- Scan player inventory + bags for the configured item
 local _ItemScanCache = {}
 local _ItemScanGen = 0
+local _ItemScanCacheSize = 0
 
 local function _InvalidateItemScanCache()
   _ItemScanGen = _ItemScanGen + 1
-  -- Keep cache bounded: keys from removed/renamed editor icons can otherwise
-  -- stay resident for the whole session. Scans are event-driven, so clearing
-  -- here is safe and prevents long-session growth.
-  for k in pairs(_ItemScanCache) do
-    _ItemScanCache[k] = nil
-  end
 
   -- Keep gen bounded (paranoid)
   if _ItemScanGen > 1000000 then
     _ItemScanGen = 1
+    for k in pairs(_ItemScanCache) do
+      _ItemScanCache[k] = nil
+    end
+    _ItemScanCacheSize = 0
   end
 end
 
@@ -1168,6 +1167,9 @@ local function _ScanPlayerItemInstances(data)
   if expectedId then
     if data._daItemScanCacheKeyType ~= "id" or data._daItemScanCacheKeyId ~= expectedId then
       if data._daItemScanCacheKey then
+        if _ItemScanCache[data._daItemScanCacheKey] ~= nil then
+          _ItemScanCacheSize = _ItemScanCacheSize - 1
+        end
         _ItemScanCache[data._daItemScanCacheKey] = nil
       end
       data._daItemScanCacheKey = "id:" .. expectedId
@@ -1179,6 +1181,9 @@ local function _ScanPlayerItemInstances(data)
   elseif expectedName and expectedName ~= "" then
     if data._daItemScanCacheKeyType ~= "name" or data._daItemScanCacheKeyName ~= expectedName then
       if data._daItemScanCacheKey then
+        if _ItemScanCache[data._daItemScanCacheKey] ~= nil then
+          _ItemScanCacheSize = _ItemScanCacheSize - 1
+        end
         _ItemScanCache[data._daItemScanCacheKey] = nil
       end
       data._daItemScanCacheKey = "name:" .. expectedName
@@ -1189,6 +1194,9 @@ local function _ScanPlayerItemInstances(data)
     cacheKey = data._daItemScanCacheKey
   else
     if data._daItemScanCacheKey then
+      if _ItemScanCache[data._daItemScanCacheKey] ~= nil then
+        _ItemScanCacheSize = _ItemScanCacheSize - 1
+      end
       _ItemScanCache[data._daItemScanCacheKey] = nil
     end
     data._daItemScanCacheKey = nil
@@ -1323,6 +1331,7 @@ local function _ScanPlayerItemInstances(data)
     if not c then
       c = {}
       _ItemScanCache[cacheKey] = c
+      _ItemScanCacheSize = _ItemScanCacheSize + 1
     end
 
     c.gen = _ItemScanGen
@@ -1343,6 +1352,17 @@ local function _ScanPlayerItemInstances(data)
     end
 
     return c.hasEquipped, c.hasBag, c.eqSlot, c.bagLoc, c.eqCount, c.bagCount
+  end
+
+  if _ItemScanCacheSize > 512 then
+    for k, v in pairs(_ItemScanCache) do
+      if (not v) or (v.gen ~= _ItemScanGen) then
+        if _ItemScanCache[k] ~= nil then
+          _ItemScanCache[k] = nil
+          _ItemScanCacheSize = _ItemScanCacheSize - 1
+        end
+      end
+    end
   end
 
   if firstBagBag ~= nil then

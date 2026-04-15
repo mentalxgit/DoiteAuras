@@ -1116,7 +1116,16 @@ end
 
 local function _RefreshPlayerItemSnapshot()
   local snap = _GetPlayerItemSnapshot()
-  snap.eq = GetEquippedItems and GetEquippedItems() or nil
+  if not snap.eq then
+    snap.eq = {}
+  end
+  local eq = snap.eq
+  local s = 1
+  while s <= 19 do
+    local info = GetEquippedItem and GetEquippedItem("player", s) or nil
+    eq[s] = info
+    s = s + 1
+  end
   snap.bags = GetBagItems and GetBagItems() or nil
   if GetAmmo then
     local ammoId, ammoCount = GetAmmo()
@@ -1231,10 +1240,6 @@ local function _ScanPlayerItemInstances(data)
 
   local snap = _GetPlayerItemSnapshot()
   local eq = snap.eq
-  if not eq and GetEquippedItems then
-    eq = GetEquippedItems()
-    snap.eq = eq
-  end
   if eq then
     local eslot, itemInfo
     for eslot, itemInfo in pairs(eq) do
@@ -1330,10 +1335,6 @@ local function _GetInventorySlotState(slot)
   end
   local snap = _GetPlayerItemSnapshot()
   local eq = snap.eq
-  if not eq and GetEquippedItems then
-    eq = GetEquippedItems()
-    snap.eq = eq
-  end
   local info = eq and eq[slot] or nil
   if (not info) and GetEquippedItem then
     info = GetEquippedItem("player", slot)

@@ -815,31 +815,6 @@ local DA_AbilityDropdownPassiveAllow = {
 }
 _G["DA_AbilityDropdownPassiveAllow"] = DA_AbilityDropdownPassiveAllow
 
--- Add non-"on use" items that should still show in item dropdowns
-local DA_ItemDropdownAllow = {
-    ["Infernal Stone"] = true,
-    ["Demonic Figurine"] = true,
-    ["Arcane Powder"] = true,
-    ["Wild Berries"] = true,
-    ["Holy Candle"] = true,
-    ["Sacred Candle"] = true,
-    ["Ankh"] = true,
-    ["Rune of Teleportation"] = true,
-    ["Rune of Portals"] = true,
-    ["Symbol of Divinity"] = true,
-    ["Maple Seed"] = true,
-    ["Stranglethorn Seed"] = true,
-    ["Ashwood Seed"] = true,
-    ["Hornbeam Seed"] = true,
-    ["Symbol of Kings"] = true,
-    ["Bright Dream Shard"] = true,
-    ["Flash Powder"] = true,
-    ["Blinding Powder"] = true,
-    ["Ironwood Seed"] = true,
-    ["Wild Thornroot"] = true,
-}
-_G["DA_ItemDropdownAllow"] = DA_ItemDropdownAllow
-
 local function DA_RebuildAbilityDropDown()
     if not abilityDropDown then return end
 

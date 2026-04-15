@@ -7972,7 +7972,6 @@ eventFrame:SetScript("OnEvent", function()
 
     dirty_ability = true
     if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      DoiteConditions._daItemSnapshotDirty = true
       dirty_aura = true
     end
 
@@ -7995,8 +7994,12 @@ eventFrame:SetScript("OnEvent", function()
     dirty_ability, dirty_aura = true, true
 
   elseif event == "UNIT_INVENTORY_CHANGED_GUID" then
-    local isPlayerInv = (arg2 == 1)
-    if (not isPlayerInv) and arg1 and GetUnitGUID then
+    local isPlayerInv = false
+    if arg2 == 1 then
+      isPlayerInv = true
+    elseif arg1 == "player" then
+      isPlayerInv = true
+    elseif arg1 and GetUnitGUID then
       local pg = GetUnitGUID("player")
       if pg and arg1 == pg then
         isPlayerInv = true

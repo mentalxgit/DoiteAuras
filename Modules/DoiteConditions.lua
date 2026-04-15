@@ -1333,17 +1333,6 @@ local function _ScanPlayerItemInstances(data)
     return c.hasEquipped, c.hasBag, c.eqSlot, c.bagLoc, c.eqCount, c.bagCount
   end
 
-  if _ItemScanCacheSize > 512 then
-    for k, v in pairs(_ItemScanCache) do
-      if (not v) or (v.gen ~= _ItemScanGen) then
-        if _ItemScanCache[k] ~= nil then
-          _ItemScanCache[k] = nil
-          _ItemScanCacheSize = _ItemScanCacheSize - 1
-        end
-      end
-    end
-  end
-
   if firstBagBag ~= nil then
     data._daItemScanBagLoc = data._daItemScanBagLoc or {}
     data._daItemScanBagLoc.bag = firstBagBag

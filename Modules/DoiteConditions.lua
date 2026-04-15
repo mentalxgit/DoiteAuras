@@ -7996,6 +7996,7 @@ eventFrame:SetScript("OnEvent", function()
 
   elseif event == "UNIT_INVENTORY_CHANGED_GUID" then
     if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+      DoiteConditions._daLastItemDirtyAt = GetTime()
       if _G.DoiteConditions_ClearTrinketFirstMemory then
         _G.DoiteConditions_ClearTrinketFirstMemory()
       end
@@ -8020,6 +8021,12 @@ eventFrame:SetScript("OnEvent", function()
     end
   elseif event == "BAG_UPDATE" then
     if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+      local now = GetTime()
+      local lastDirty = DoiteConditions._daLastItemDirtyAt or 0
+      if (now - lastDirty) < 0.05 then
+        return
+      end
+      DoiteConditions._daLastItemDirtyAt = now
       DoiteConditions._daItemSnapshotDirty = true
       dirty_ability = true
       dirty_aura = true

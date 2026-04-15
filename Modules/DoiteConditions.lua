@@ -7731,10 +7731,6 @@ function DoiteConditions_OnUpdate(dt)
     if _hasAnyAbilityTimeLogic then
       dirty_ability_time = true
     end
-
-    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      dirty_aura = true
-    end
   end
 
   -- Weapon temp-enchant fast tick:

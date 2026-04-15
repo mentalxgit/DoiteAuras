@@ -1125,6 +1125,10 @@ _RefreshPlayerItemSnapshot = function()
     snap = {}
     DoiteConditions._daPlayerItemSnapshot = snap
   end
+  if not (UnitExists and UnitExists("player")) then
+    DoiteConditions._daItemSnapshotDirty = true
+    return
+  end
   if not snap.eq then
     snap.eq = {}
   end
@@ -7863,7 +7867,6 @@ if _G.UnitExists and _G.UnitExists("target") then
   DoiteConditions_ScanUnitAuras("target")
 end
 DoiteConditions._daItemSnapshotDirty = true
-_RefreshPlayerItemSnapshot()
 dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
 
 ---------------------------------------------------------------

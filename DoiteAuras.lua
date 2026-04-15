@@ -937,30 +937,6 @@ local function DA_AddItemOption(name)
     DA_ItemOptions[n + 1] = name
 end
 
-local function DA_IsAllowlistedItemName(itemName)
-    local allow = _G["DA_ItemDropdownAllow"]
-    return (allow and itemName and allow[itemName] == true) and true or false
-end
-
--- Check current DoiteAurasTooltip for a line that looks like "Use..." or "consume..."
-local function DA_TooltipHasUseOrConsume()
-    local i
-    for i = 1, 15 do
-        local fs = DA_TipLeft[i]
-        if fs and fs.GetText then
-            local txt = fs:GetText()
-            if txt then
-                local lower = string.lower(txt)
-                if string.find(lower, "use:") or string.find(lower, "use ") or string.find(lower, "consume") then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
-local DA_ItemUseByIdCache = {}
 local DA_ItemInfoByIdCache = {}
 
 local function DA_GetItemInfoById(itemId)
@@ -975,24 +951,6 @@ local function DA_GetItemInfoById(itemId)
     return name, texture
 end
 
-local function DA_IsUsableItemById(itemId)
-    if not itemId then return false end
-    local v = DA_ItemUseByIdCache[itemId]
-    if v ~= nil then
-        return v
-    end
-
-    local isUse = false
-    if daTip and daTip.SetHyperlink then
-        daTip:ClearLines()
-        daTip:SetHyperlink("item:" .. tostring(itemId))
-        isUse = DA_TooltipHasUseOrConsume() and true or false
-    end
-
-    DA_ItemUseByIdCache[itemId] = isUse
-    return isUse
-end
-
 -- Scan equipped trinkets + weapons for usable / consumable effects
 local function DA_ScanEquippedUsable()
     -- Trinket1 (13), Trinket2 (14), Main hand (16), Off hand (17), Ranged/Wand (18)
@@ -1004,7 +962,7 @@ local function DA_ScanEquippedUsable()
         local itemId = info and info.itemId
         if itemId then
             local itemName = DA_GetItemInfoById(itemId)
-            if itemName and (DA_IsUsableItemById(itemId) or DA_IsAllowlistedItemName(itemName)) then
+            if itemName then
                 DA_AddItemOption(itemName)
             end
         end
@@ -1025,7 +983,7 @@ local function DA_ScanBagUsable()
                 local itemId = itemInfo and itemInfo.itemId
                 if itemId then
                     local itemName = DA_GetItemInfoById(itemId)
-                    if itemName and (DA_IsUsableItemById(itemId) or DA_IsAllowlistedItemName(itemName)) then
+                    if itemName then
                         DA_AddItemOption(itemName)
                     end
                 end

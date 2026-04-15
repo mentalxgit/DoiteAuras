@@ -1105,6 +1105,30 @@ local function _InvalidateItemScanCache()
   end
 end
 
+local function _GetPlayerItemSnapshot()
+  local snap = DoiteConditions._daPlayerItemSnapshot
+  if not snap then
+    snap = {}
+    DoiteConditions._daPlayerItemSnapshot = snap
+  end
+  return snap
+end
+
+local function _RefreshPlayerItemSnapshot()
+  local snap = _GetPlayerItemSnapshot()
+  snap.eq = GetEquippedItems and GetEquippedItems("player") or nil
+  snap.bags = GetBagItems and GetBagItems() or nil
+  if GetAmmo then
+    local ammoId, ammoCount = GetAmmo()
+    snap.ammoId = ammoId
+    snap.ammoCount = ammoCount
+  else
+    snap.ammoId = nil
+    snap.ammoCount = 0
+  end
+  _InvalidateItemScanCache()
+end
+
 local function _ScanPlayerItemInstances(data)
   if not data then
     return false, false, nil, nil, 0, 0
@@ -1205,7 +1229,12 @@ local function _ScanPlayerItemInstances(data)
     end
   end
 
-  local eq = GetEquippedItems and GetEquippedItems("player")
+  local snap = _GetPlayerItemSnapshot()
+  local eq = snap.eq
+  if not eq and GetEquippedItems then
+    eq = GetEquippedItems("player")
+    snap.eq = eq
+  end
   if eq then
     local eslot, itemInfo
     for eslot, itemInfo in pairs(eq) do
@@ -1224,7 +1253,11 @@ local function _ScanPlayerItemInstances(data)
     end
   end
 
-  local bags = GetBagItems and GetBagItems()
+  local bags = snap.bags
+  if not bags and GetBagItems then
+    bags = GetBagItems()
+    snap.bags = bags
+  end
   if bags then
     local b = 0
     while b <= 4 do
@@ -1295,7 +1328,16 @@ local function _GetInventorySlotState(slot)
   if not slot then
     return false, false, 0, 0, false
   end
-  local info = GetEquippedItem and GetEquippedItem("player", slot)
+  local snap = _GetPlayerItemSnapshot()
+  local eq = snap.eq
+  if not eq and GetEquippedItems then
+    eq = GetEquippedItems("player")
+    snap.eq = eq
+  end
+  local info = eq and eq[slot] or nil
+  if (not info) and GetEquippedItem then
+    info = GetEquippedItem("player", slot)
+  end
   local itemId = info and info.itemId
   if not itemId then
     return false, false, 0, 0, false
@@ -1432,8 +1474,8 @@ local function _EvaluateItemCoreState(data, c)
       local idx = _SlotIndexForName(invSlotName)
       local hasItem, onCd, rem, dur
       if invSlotName == "AMMO" then
-        local ammoId = GetAmmo and GetAmmo() or nil
-        hasItem = (ammoId ~= nil)
+        local snap = _GetPlayerItemSnapshot()
+        hasItem = (snap.ammoId ~= nil)
         onCd = false
         rem = 0
         dur = 0
@@ -1891,11 +1933,8 @@ local function _EvaluateItemCoreState(data, c)
       else
         local slotCount
         if invSlotName == "AMMO" then
-          local cnt = 0
-          if GetAmmo then
-            local _, c = GetAmmo()
-            cnt = c or 0
-          end
+          local snap = _GetPlayerItemSnapshot()
+          local cnt = snap.ammoCount or 0
           slotCount = tonumber(cnt) or 0
           if slotCount < 0 then
             slotCount = 0
@@ -1980,8 +2019,13 @@ local function _EvaluateItemCoreState(data, c)
 
   if kind and loc then
     local hasItem, onCd, rem, dur
+    local snap = _GetPlayerItemSnapshot()
     if kind == "inv" then
-      local eqInfo = GetEquippedItem and GetEquippedItem("player", loc)
+      local eq = snap.eq
+      local eqInfo = eq and eq[loc] or nil
+      if (not eqInfo) and GetEquippedItem then
+        eqInfo = GetEquippedItem("player", loc)
+      end
       hasItem = (eqInfo and eqInfo.itemId) and true or false
       local start, dur0, enable = GetInventoryItemCooldown("player", loc)
       if start and dur0 and start > 0 and dur0 > DOITE_ITEM_CD_IGNORE then
@@ -1998,7 +2042,12 @@ local function _EvaluateItemCoreState(data, c)
         dur = dur0 or 0
       end
     else
-      local bInfo = GetBagItem and GetBagItem(loc.bag, loc.slot)
+      local bags = snap.bags
+      local bagData = bags and bags[loc.bag] or nil
+      local bInfo = bagData and bagData[loc.slot] or nil
+      if (not bInfo) and GetBagItem then
+        bInfo = GetBagItem(loc.bag, loc.slot)
+      end
       hasItem = (bInfo and bInfo.itemId) and true or false
       local start, dur0, enable = GetContainerItemCooldown(loc.bag, loc.slot)
       if start and dur0 and start > 0 and dur0 > DOITE_ITEM_CD_IGNORE then
@@ -7792,6 +7841,7 @@ _tick:SetScript("OnUpdate", _DoiteConditions_OnUpdateWrapper)
 if _G.UnitExists and _G.UnitExists("target") then
   DoiteConditions_ScanUnitAuras("target")
 end
+_RefreshPlayerItemSnapshot()
 dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
 
 ---------------------------------------------------------------
@@ -7822,6 +7872,7 @@ eventFrame:SetScript("OnEvent", function()
       DoiteConditions_ScanUnitAuras("target")
     end
     dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
+    _RefreshPlayerItemSnapshot()
 
     -- Cache player class for lightweight warrior-specific logic
     local _, cls = UnitClass("player")
@@ -7922,9 +7973,7 @@ eventFrame:SetScript("OnEvent", function()
       if _G.DoiteConditions_ClearTrinketFirstMemory then
         _G.DoiteConditions_ClearTrinketFirstMemory()
       end
-      if _InvalidateItemScanCache then
-        _InvalidateItemScanCache()
-      end
+      _RefreshPlayerItemSnapshot()
 
       -- Temp enchant tracking: force a refresh on next evaluation
       local te = DoiteConditions._daTempEnchantCache

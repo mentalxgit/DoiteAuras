@@ -7887,6 +7887,7 @@ eventFrame:RegisterEvent("SPELLS_CHANGED")
 eventFrame:RegisterEvent("UNIT_HEALTH")
 eventFrame:RegisterEvent("PLAYER_COMBO_POINTS")
 eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED_GUID")
+eventFrame:RegisterEvent("BAG_UPDATE")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 
@@ -8014,6 +8015,12 @@ eventFrame:SetScript("OnEvent", function()
         end
       end
 
+      dirty_ability = true
+      dirty_aura = true
+    end
+  elseif event == "BAG_UPDATE" then
+    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+      DoiteConditions._daItemSnapshotDirty = true
       dirty_ability = true
       dirty_aura = true
     end

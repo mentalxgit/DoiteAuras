@@ -1105,17 +1105,26 @@ local function _InvalidateItemScanCache()
   end
 end
 
+local _RefreshPlayerItemSnapshot
+
 local function _GetPlayerItemSnapshot()
   local snap = DoiteConditions._daPlayerItemSnapshot
   if not snap then
     snap = {}
     DoiteConditions._daPlayerItemSnapshot = snap
   end
+  if DoiteConditions._daItemSnapshotDirty and _RefreshPlayerItemSnapshot then
+    _RefreshPlayerItemSnapshot()
+  end
   return snap
 end
 
-local function _RefreshPlayerItemSnapshot()
-  local snap = _GetPlayerItemSnapshot()
+_RefreshPlayerItemSnapshot = function()
+  local snap = DoiteConditions._daPlayerItemSnapshot
+  if not snap then
+    snap = {}
+    DoiteConditions._daPlayerItemSnapshot = snap
+  end
   if not snap.eq then
     snap.eq = {}
   end
@@ -1135,6 +1144,7 @@ local function _RefreshPlayerItemSnapshot()
     snap.ammoId = nil
     snap.ammoCount = 0
   end
+  DoiteConditions._daItemSnapshotDirty = false
   _InvalidateItemScanCache()
 end
 
@@ -1197,26 +1207,10 @@ local function _ScanPlayerItemInstances(data)
   local firstBagBag = nil
   local firstBagSlot = nil
   local eqCount, bagCount = 0, 0
-  local nameCache = nil
-  local function _Matches(itemId)
-    if not itemId then
-      return false
-    end
-    if expectedId then
-      return itemId == expectedId
-    end
-    if not expectedName or expectedName == "" then
-      return false
-    end
-    if not nameCache then
-      nameCache = {}
-    end
-    local nm = nameCache[itemId]
-    if nm == nil then
-      nm = GetItemInfo and GetItemInfo(itemId) or false
-      nameCache[itemId] = nm
-    end
-    return (nm and nm == expectedName) and true or false
+  local nameCache = DoiteConditions._itemNameByIdCache
+  if not nameCache then
+    nameCache = {}
+    DoiteConditions._itemNameByIdCache = nameCache
   end
 
   local bag, slot = nil, nil
@@ -1244,7 +1238,20 @@ local function _ScanPlayerItemInstances(data)
     local eslot, itemInfo
     for eslot, itemInfo in pairs(eq) do
       local itemId = itemInfo and itemInfo.itemId
-      if _Matches(itemId) then
+      local match = false
+      if itemId then
+        if expectedId then
+          match = (itemId == expectedId)
+        elseif expectedName and expectedName ~= "" then
+          local nm = nameCache[itemId]
+          if nm == nil then
+            nm = GetItemInfo and GetItemInfo(itemId) or false
+            nameCache[itemId] = nm
+          end
+          match = (nm and nm == expectedName) and true or false
+        end
+      end
+      if match then
         hasEquipped = true
         if not firstEquippedSlot then
           firstEquippedSlot = eslot
@@ -1271,7 +1278,20 @@ local function _ScanPlayerItemInstances(data)
         local bslot, itemInfo
         for bslot, itemInfo in pairs(bagData) do
           local itemId = itemInfo and itemInfo.itemId
-          if _Matches(itemId) then
+          local match = false
+          if itemId then
+            if expectedId then
+              match = (itemId == expectedId)
+            elseif expectedName and expectedName ~= "" then
+              local nm = nameCache[itemId]
+              if nm == nil then
+                nm = GetItemInfo and GetItemInfo(itemId) or false
+                nameCache[itemId] = nm
+              end
+              match = (nm and nm == expectedName) and true or false
+            end
+          end
+          if match then
             hasBag = true
             if firstBagBag == nil then
               firstBagBag = b
@@ -7842,6 +7862,7 @@ _tick:SetScript("OnUpdate", _DoiteConditions_OnUpdateWrapper)
 if _G.UnitExists and _G.UnitExists("target") then
   DoiteConditions_ScanUnitAuras("target")
 end
+DoiteConditions._daItemSnapshotDirty = true
 _RefreshPlayerItemSnapshot()
 dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
 
@@ -7873,7 +7894,7 @@ eventFrame:SetScript("OnEvent", function()
       DoiteConditions_ScanUnitAuras("target")
     end
     dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
-    _RefreshPlayerItemSnapshot()
+    DoiteConditions._daItemSnapshotDirty = true
 
     -- Cache player class for lightweight warrior-specific logic
     local _, cls = UnitClass("player")
@@ -7974,7 +7995,7 @@ eventFrame:SetScript("OnEvent", function()
       if _G.DoiteConditions_ClearTrinketFirstMemory then
         _G.DoiteConditions_ClearTrinketFirstMemory()
       end
-      _RefreshPlayerItemSnapshot()
+      DoiteConditions._daItemSnapshotDirty = true
 
       -- Temp enchant tracking: force a refresh on next evaluation
       local te = DoiteConditions._daTempEnchantCache

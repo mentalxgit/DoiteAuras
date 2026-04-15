@@ -1249,8 +1249,10 @@ local function _ScanPlayerItemInstances(data)
         elseif expectedName and expectedName ~= "" then
           local nm = nameCache[itemId]
           if nm == nil then
-            nm = GetItemInfo and GetItemInfo(itemId) or false
-            nameCache[itemId] = nm
+            nm = GetItemInfo and GetItemInfo(itemId) or nil
+            if nm then
+              nameCache[itemId] = nm
+            end
           end
           match = (nm and nm == expectedName) and true or false
         end
@@ -1289,8 +1291,10 @@ local function _ScanPlayerItemInstances(data)
             elseif expectedName and expectedName ~= "" then
               local nm = nameCache[itemId]
               if nm == nil then
-                nm = GetItemInfo and GetItemInfo(itemId) or false
-                nameCache[itemId] = nm
+                nm = GetItemInfo and GetItemInfo(itemId) or nil
+                if nm then
+                  nameCache[itemId] = nm
+                end
               end
               match = (nm and nm == expectedName) and true or false
             end
@@ -8017,7 +8021,6 @@ eventFrame:SetScript("OnEvent", function()
       end
 
       dirty_ability = true
-      dirty_aura = true
     end
   elseif event == "BAG_UPDATE" then
     if DoiteConditions and DoiteConditions._hasAnyItemLogic then
@@ -8029,7 +8032,6 @@ eventFrame:SetScript("OnEvent", function()
       DoiteConditions._daLastItemDirtyAt = now
       DoiteConditions._daItemSnapshotDirty = true
       dirty_ability = true
-      dirty_aura = true
     end
 
   elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then

@@ -921,6 +921,9 @@ local function DA_GetItemInfoById(itemId)
         return c.name, c.texture
     end
     local name, _, _, _, _, _, _, _, _, texture = GetItemInfo(itemId)
+    if not name and not texture then
+        return nil, nil
+    end
     c = { name = name, texture = texture }
     DA_ItemInfoByIdCache[itemId] = c
     return name, texture

@@ -1065,27 +1065,6 @@ local function _ClearTrinketFirstMemory()
 end
 _G.DoiteConditions_ClearTrinketFirstMemory = _ClearTrinketFirstMemory
 
--- Parse itemID and [Name] out of a WoW item link
-local function _ParseItemLink(link)
-  if not link then
-    return nil, nil
-  end
-
-  local itemId
-  local _, _, idStr = str_find(link, "item:(%d+)")
-  if idStr then
-    itemId = tonumber(idStr)
-  end
-
-  local name
-  local _, _, nameStr = str_find(link, "%[(.+)%]")
-  if nameStr and nameStr ~= "" then
-    name = nameStr
-  end
-
-  return itemId, name
-end
-
 -- Scan player inventory + bags for the configured item
 local _ItemScanCache = {}
 local _ItemScanGen = 0

@@ -1380,7 +1380,7 @@ local function _GetInventorySlotState(slot)
     dur = dur or 0
   end
 
-  -- Detect usable / on-use items using item APIs (locale-safe, no tooltip parsing).
+  -- Detect usable / on-use items with API-first checks, then slot-tooltip fallback.
   -- Cache by itemId when possible (stable key, avoids link-variant key growth).
   local useCache = DoiteConditions._itemUseCache
   if not useCache then
@@ -1391,9 +1391,8 @@ local function _GetInventorySlotState(slot)
 
   local cacheKey = itemId
 
-  local isUse = useCache[cacheKey]
-  if isUse == nil then
-    isUse = false
+  local isUse = (useCache[cacheKey] == true)
+  if not isUse then
 
     -- If an equipped item is currently on inventory cooldown, treat it as usable.
     if onCd then
@@ -1451,14 +1450,18 @@ local function _GetInventorySlotState(slot)
       end
     end
 
-    useCache[cacheKey] = isUse
+    -- Cache positive hits only, so we don't pin false negatives forever
+    -- when item/spell metadata isn't available yet.
+    if isUse then
+      useCache[cacheKey] = true
 
-    DoiteConditions._itemUseCacheN = (DoiteConditions._itemUseCacheN or 0) + 1
-    if DoiteConditions._itemUseCacheN > 256 then
-      for k in pairs(useCache) do
-        useCache[k] = nil
+      DoiteConditions._itemUseCacheN = (DoiteConditions._itemUseCacheN or 0) + 1
+      if DoiteConditions._itemUseCacheN > 256 then
+        for k in pairs(useCache) do
+          useCache[k] = nil
+        end
+        DoiteConditions._itemUseCacheN = 0
       end
-      DoiteConditions._itemUseCacheN = 0
     end
   end
 

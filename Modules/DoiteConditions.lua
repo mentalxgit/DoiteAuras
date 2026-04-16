@@ -4667,6 +4667,7 @@ local _timeKeysAbilityItem_live = {}
 local _timeKeysAbilityItem_edit = {}
 local _timeKeysAura_live = {}
 local _timeKeysAura_edit = {}
+local _DA_EMPTY_TABLE = {}
 
 local function _WipeArray(t)
   local n = table.getn(t)
@@ -7659,7 +7660,7 @@ function DoiteConditions_UpdateTimeText()
 
   -- Editor-only icons (keys not in live)
   if edit then
-    local skipKeys = live or {}
+    local skipKeys = live or _DA_EMPTY_TABLE
 
     -- Ability/Item keys with time logic
     do

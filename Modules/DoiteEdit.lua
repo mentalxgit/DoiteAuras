@@ -5936,24 +5936,30 @@ do
       seen[name] = true
       table.insert(items, name)
     end
-    local function _NameFromLink(link)
-      if not link or link == "" then return nil end
-      local nm = GetItemInfo and GetItemInfo(link)
+    local function _NameFromId(itemId)
+      if not itemId then return nil end
+      local nm = GetItemInfo and GetItemInfo(itemId)
       if nm and nm ~= "" then return nm end
-      local _, _, txt = string.find(link, "%[(.-)%]")
-      return txt
+      return nil
     end
+    local slots = {13, 14, 16, 17, 18}
     local i
-    for _, i in ipairs({13,14,16,17,18}) do
-      _Add(_NameFromLink(GetInventoryItemLink and GetInventoryItemLink("player", i)))
+    for i = 1, table.getn(slots) do
+      local info = GetEquippedItem and GetEquippedItem("player", slots[i])
+      _Add(_NameFromId(info and info.itemId))
     end
-    local bag, slot
-    for bag = 0, 4 do
-      local n = GetContainerNumSlots and GetContainerNumSlots(bag)
-      if n and n > 0 then
-        for slot = 1, n do
-          _Add(_NameFromLink(GetContainerItemLink and GetContainerItemLink(bag, slot)))
+    local bags = GetBagItems and GetBagItems()
+    if bags then
+      local bag = 0
+      while bag <= 4 do
+        local bagData = bags[bag]
+        if bagData then
+          local slot, itemInfo
+          for slot, itemInfo in pairs(bagData) do
+            _Add(_NameFromId(itemInfo and itemInfo.itemId))
+          end
         end
+        bag = bag + 1
       end
     end
     table.sort(items, function(a, b)
@@ -7347,24 +7353,30 @@ do
       seen[name] = true
       table.insert(items, name)
     end
-    local function _NameFromLink(link)
-      if not link or link == "" then return nil end
-      local nm = GetItemInfo and GetItemInfo(link)
+    local function _NameFromId(itemId)
+      if not itemId then return nil end
+      local nm = GetItemInfo and GetItemInfo(itemId)
       if nm and nm ~= "" then return nm end
-      local _, _, txt = string.find(link, "%[(.-)%]")
-      return txt
+      return nil
     end
+    local slots = {13, 14, 16, 17, 18}
     local i
-    for _, i in ipairs({13,14,16,17,18}) do
-      _Add(_NameFromLink(GetInventoryItemLink and GetInventoryItemLink("player", i)))
+    for i = 1, table.getn(slots) do
+      local info = GetEquippedItem and GetEquippedItem("player", slots[i])
+      _Add(_NameFromId(info and info.itemId))
     end
-    local bag, slot
-    for bag = 0, 4 do
-      local n = GetContainerNumSlots and GetContainerNumSlots(bag)
-      if n and n > 0 then
-        for slot = 1, n do
-          _Add(_NameFromLink(GetContainerItemLink and GetContainerItemLink(bag, slot)))
+    local bags = GetBagItems and GetBagItems()
+    if bags then
+      local bag = 0
+      while bag <= 4 do
+        local bagData = bags[bag]
+        if bagData then
+          local slot, itemInfo
+          for slot, itemInfo in pairs(bagData) do
+            _Add(_NameFromId(itemInfo and itemInfo.itemId))
+          end
         end
+        bag = bag + 1
       end
     end
     table.sort(items, function(a, b)

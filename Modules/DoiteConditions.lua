@@ -4824,6 +4824,7 @@ end
 -- Global flags: do we have ANY icons that use targetDistance / targetUnitType?
 local _hasAnyTargetMods_Ability = false
 local _hasAnyTargetMods_Aura = false
+local _hasAnyCustomLogic = false
 
 local function _IconHasTargetMods_AbilityOrItem(data)
   if not data or not data.conditions then
@@ -4855,6 +4856,7 @@ end
 local function _RebuildTargetModsFlags()
   _hasAnyTargetMods_Ability = false
   _hasAnyTargetMods_Aura = false
+  _hasAnyCustomLogic = false
   if DoiteConditions then
     DoiteConditions._hasAnyItemLogic = false
   end
@@ -4864,6 +4866,9 @@ local function _RebuildTargetModsFlags()
     for key, data in pairs(DoiteAurasDB.spells) do
       if type(data) == "table" and data.type then
         local hasItemLogic = false
+        if data.type == "Custom" then
+          _hasAnyCustomLogic = true
+        end
 
         if data.type == "Item" then
           hasItemLogic = true
@@ -4929,6 +4934,9 @@ local function _RebuildTargetModsFlags()
     for key, data in pairs(DoiteDB.icons) do
       if type(data) == "table" and data.type then
         local hasItemLogic = false
+        if data.type == "Custom" then
+          _hasAnyCustomLogic = true
+        end
 
         if data.type == "Item" then
           hasItemLogic = true
@@ -7823,7 +7831,9 @@ function DoiteConditions_OnUpdate(dt)
   end
 
   -- Custom functions run here near the end of OnUpdate.
-  didCustom = _G.DoiteConditions:EvaluateCustom() and true or false
+  if _hasAnyCustomLogic then
+    didCustom = _G.DoiteConditions:EvaluateCustom() and true or false
+  end
 
   if needAbilityLogic or needAbilityTime or needAura or didCustom then
     dirty_aura, dirty_target, dirty_power = false, false, false

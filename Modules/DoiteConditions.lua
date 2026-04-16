@@ -1373,7 +1373,7 @@ local function _GetInventorySlotState(slot)
     dur = dur or 0
   end
 
-  -- Detect usable / "Use:"-style items via tooltip text.
+  -- Detect usable / on-use items using item APIs (locale-safe, no tooltip parsing).
   -- Cache by itemId when possible (stable key, avoids link-variant key growth).
   local useCache = DoiteConditions._itemUseCache
   if not useCache then
@@ -1386,27 +1386,31 @@ local function _GetInventorySlotState(slot)
 
   local isUse = useCache[cacheKey]
   if isUse == nil then
-    _EnsureTooltip()
-    DoiteConditionsTooltip:ClearLines()
-    DoiteConditionsTooltip:SetHyperlink("item:" .. tostring(itemId))
-
     isUse = false
-    local i = 1
-    while i <= 15 do
-      local fs = _CondTipLeft[i]
-      if not fs or not fs.GetText then
-        break
-      end
-      local txt = fs:GetText()
-      if txt and txt ~= "" then
-        local lower = string.lower(txt)
-        if str_find(lower, "use:") or str_find(lower, "use ")
-            or str_find(lower, "consume") then
+
+    -- Prefer structured equipped-item metadata when provided by helper APIs.
+    if info then
+      if info.hasUseSpell == true or info.hasUseEffect == true then
+        isUse = true
+      else
+        local useSpellId = tonumber(info.useSpellId) or 0
+        if useSpellId > 0 then
           isUse = true
-          break
+        else
+          local spellId = tonumber(info.spellId) or 0
+          if spellId > 0 then
+            isUse = true
+          end
         end
       end
-      i = i + 1
+    end
+
+    -- Fallback for clients/helpers that don't expose the richer fields above.
+    if (not isUse) and GetItemSpell then
+      local spellName = GetItemSpell(itemId)
+      if spellName and spellName ~= "" then
+        isUse = true
+      end
     end
 
     useCache[cacheKey] = isUse

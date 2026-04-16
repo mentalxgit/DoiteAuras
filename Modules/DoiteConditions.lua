@@ -1349,6 +1349,7 @@ local function _GetInventorySlotState(slot)
   if not slot then
     return false, false, 0, 0, false
   end
+  local link = GetInventoryItemLink and GetInventoryItemLink("player", slot) or nil
   local snap = _GetPlayerItemSnapshot()
   local eq = snap.eq
   local info = eq and eq[slot] or nil
@@ -1356,6 +1357,12 @@ local function _GetInventorySlotState(slot)
     info = GetEquippedItem("player", slot)
   end
   local itemId = info and info.itemId
+  if (not itemId) and link then
+    local _, _, idStr = str_find(link, "item:(%d+)")
+    if idStr then
+      itemId = tonumber(idStr)
+    end
+  end
   if not itemId then
     return false, false, 0, 0, false
   end
@@ -1373,7 +1380,7 @@ local function _GetInventorySlotState(slot)
     dur = dur or 0
   end
 
-  -- Detect usable / on-use items using item APIs (locale-safe, no tooltip parsing).
+  -- Detect usable / on-use items with API-first checks, then slot-tooltip fallback.
   -- Cache by itemId when possible (stable key, avoids link-variant key growth).
   local useCache = DoiteConditions._itemUseCache
   if not useCache then
@@ -1384,12 +1391,16 @@ local function _GetInventorySlotState(slot)
 
   local cacheKey = itemId
 
-  local isUse = useCache[cacheKey]
-  if isUse == nil then
-    isUse = false
+  local isUse = (useCache[cacheKey] == true)
+  if not isUse then
+
+    -- If an equipped item is currently on inventory cooldown, treat it as usable.
+    if onCd then
+      isUse = true
+    end
 
     -- Prefer structured equipped-item metadata when provided by helper APIs.
-    if info then
+    if (not isUse) and info then
       if info.hasUseSpell == true or info.hasUseEffect == true then
         isUse = true
       else
@@ -1413,14 +1424,44 @@ local function _GetInventorySlotState(slot)
       end
     end
 
-    useCache[cacheKey] = isUse
+    -- Last-resort fallback: parse the actual equipped-slot tooltip for classic/local helpers
+    -- that do not provide spell metadata reliably.
+    if (not isUse) and _EnsureTooltip and DoiteConditionsTooltip and DoiteConditionsTooltip.SetInventoryItem then
+      _EnsureTooltip()
+      DoiteConditionsTooltip:ClearLines()
+      DoiteConditionsTooltip:SetInventoryItem("player", slot)
 
-    DoiteConditions._itemUseCacheN = (DoiteConditions._itemUseCacheN or 0) + 1
-    if DoiteConditions._itemUseCacheN > 256 then
-      for k in pairs(useCache) do
-        useCache[k] = nil
+      local i = 1
+      while i <= 15 do
+        local fs = _CondTipLeft[i]
+        if not fs or not fs.GetText then
+          break
+        end
+        local txt = fs:GetText()
+        if txt and txt ~= "" then
+          local lower = string.lower(txt)
+          if str_find(lower, "use:") or str_find(lower, "use ")
+              or str_find(lower, "consume") then
+            isUse = true
+            break
+          end
+        end
+        i = i + 1
       end
-      DoiteConditions._itemUseCacheN = 0
+    end
+
+    -- Cache positive hits only, so we don't pin false negatives forever
+    -- when item/spell metadata isn't available yet.
+    if isUse then
+      useCache[cacheKey] = true
+
+      DoiteConditions._itemUseCacheN = (DoiteConditions._itemUseCacheN or 0) + 1
+      if DoiteConditions._itemUseCacheN > 256 then
+        for k in pairs(useCache) do
+          useCache[k] = nil
+        end
+        DoiteConditions._itemUseCacheN = 0
+      end
     end
   end
 

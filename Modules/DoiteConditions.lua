@@ -1959,9 +1959,11 @@ local function _EvaluateItemCoreState(data, c)
         else
           slotCount = 0
           if idx ~= nil then
-            local ok, cnt = pcall(GetInventoryItemCount, "player", idx)
-            if ok and cnt then
-              slotCount = cnt
+            local snap = _GetPlayerItemSnapshot()
+            local eq = snap.eq
+            local info = eq and eq[idx] or nil
+            if info and info.stackCount ~= nil then
+              slotCount = tonumber(info.stackCount) or 0
             end
           end
           if slotCount <= 0 then

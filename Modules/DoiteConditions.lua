@@ -1065,44 +1065,69 @@ local function _ClearTrinketFirstMemory()
 end
 _G.DoiteConditions_ClearTrinketFirstMemory = _ClearTrinketFirstMemory
 
--- Parse itemID and [Name] out of a WoW item link
-local function _ParseItemLink(link)
-  if not link then
-    return nil, nil
-  end
-
-  local itemId
-  local _, _, idStr = str_find(link, "item:(%d+)")
-  if idStr then
-    itemId = tonumber(idStr)
-  end
-
-  local name
-  local _, _, nameStr = str_find(link, "%[(.+)%]")
-  if nameStr and nameStr ~= "" then
-    name = nameStr
-  end
-
-  return itemId, name
-end
-
 -- Scan player inventory + bags for the configured item
 local _ItemScanCache = {}
 local _ItemScanGen = 0
+local _ItemScanCacheSize = 0
 
 local function _InvalidateItemScanCache()
   _ItemScanGen = _ItemScanGen + 1
-  -- Keep cache bounded: keys from removed/renamed editor icons can otherwise
-  -- stay resident for the whole session. Scans are event-driven, so clearing
-  -- here is safe and prevents long-session growth.
-  for k in pairs(_ItemScanCache) do
-    _ItemScanCache[k] = nil
-  end
 
   -- Keep gen bounded (paranoid)
   if _ItemScanGen > 1000000 then
     _ItemScanGen = 1
+    for k in pairs(_ItemScanCache) do
+      _ItemScanCache[k] = nil
+    end
+    _ItemScanCacheSize = 0
   end
+end
+
+local _RefreshPlayerItemSnapshot
+
+local function _GetPlayerItemSnapshot()
+  local snap = DoiteConditions._daPlayerItemSnapshot
+  if not snap then
+    snap = {}
+    DoiteConditions._daPlayerItemSnapshot = snap
+  end
+  if DoiteConditions._daItemSnapshotDirty and _RefreshPlayerItemSnapshot then
+    _RefreshPlayerItemSnapshot()
+  end
+  return snap
+end
+
+_RefreshPlayerItemSnapshot = function()
+  local snap = DoiteConditions._daPlayerItemSnapshot
+  if not snap then
+    snap = {}
+    DoiteConditions._daPlayerItemSnapshot = snap
+  end
+  if not (UnitExists and UnitExists("player")) then
+    DoiteConditions._daItemSnapshotDirty = true
+    return
+  end
+  if not snap.eq then
+    snap.eq = {}
+  end
+  local eq = snap.eq
+  local s = 1
+  while s <= 19 do
+    local info = GetEquippedItem and GetEquippedItem("player", s) or nil
+    eq[s] = info
+    s = s + 1
+  end
+  snap.bags = GetBagItems and GetBagItems() or nil
+  if GetAmmo then
+    local ammoId, ammoCount = GetAmmo()
+    snap.ammoId = ammoId
+    snap.ammoCount = ammoCount
+  else
+    snap.ammoId = nil
+    snap.ammoCount = 0
+  end
+  DoiteConditions._daItemSnapshotDirty = false
+  _InvalidateItemScanCache()
 end
 
 local function _ScanPlayerItemInstances(data)
@@ -1121,6 +1146,9 @@ local function _ScanPlayerItemInstances(data)
   if expectedId then
     if data._daItemScanCacheKeyType ~= "id" or data._daItemScanCacheKeyId ~= expectedId then
       if data._daItemScanCacheKey then
+        if _ItemScanCache[data._daItemScanCacheKey] ~= nil then
+          _ItemScanCacheSize = _ItemScanCacheSize - 1
+        end
         _ItemScanCache[data._daItemScanCacheKey] = nil
       end
       data._daItemScanCacheKey = "id:" .. expectedId
@@ -1132,6 +1160,9 @@ local function _ScanPlayerItemInstances(data)
   elseif expectedName and expectedName ~= "" then
     if data._daItemScanCacheKeyType ~= "name" or data._daItemScanCacheKeyName ~= expectedName then
       if data._daItemScanCacheKey then
+        if _ItemScanCache[data._daItemScanCacheKey] ~= nil then
+          _ItemScanCacheSize = _ItemScanCacheSize - 1
+        end
         _ItemScanCache[data._daItemScanCacheKey] = nil
       end
       data._daItemScanCacheKey = "name:" .. expectedName
@@ -1142,6 +1173,9 @@ local function _ScanPlayerItemInstances(data)
     cacheKey = data._daItemScanCacheKey
   else
     if data._daItemScanCacheKey then
+      if _ItemScanCache[data._daItemScanCacheKey] ~= nil then
+        _ItemScanCacheSize = _ItemScanCacheSize - 1
+      end
       _ItemScanCache[data._daItemScanCacheKey] = nil
     end
     data._daItemScanCacheKey = nil
@@ -1164,89 +1198,110 @@ local function _ScanPlayerItemInstances(data)
   local firstBagBag = nil
   local firstBagSlot = nil
   local eqCount, bagCount = 0, 0
+  local nameCache = DoiteConditions._itemNameByIdCache
+  if not nameCache then
+    nameCache = {}
+    DoiteConditions._itemNameByIdCache = nameCache
+  end
 
-  -- Equipped slots (1..19 is enough; trinkets/weapons are in here)
-  local slot = 1
-  while slot <= 19 do
-    local link = GetInventoryItemLink("player", slot)
-    if link then
-      local id, name = nil, nil
+  local bag, slot = nil, nil
+  if FindPlayerItemSlot then
+    if expectedId then
+      bag, slot = FindPlayerItemSlot(expectedId)
+    elseif expectedName and expectedName ~= "" then
+      bag, slot = FindPlayerItemSlot(expectedName)
+    end
+  end
+  if slot then
+    if bag == nil then
+      hasEquipped = true
+      firstEquippedSlot = slot
+    elseif bag >= 0 and bag <= 4 then
+      hasBag = true
+      firstBagBag = bag
+      firstBagSlot = slot
+    end
+  end
+
+  local snap = _GetPlayerItemSnapshot()
+  local eq = snap.eq
+  if eq then
+    local eslot, itemInfo
+    for eslot, itemInfo in pairs(eq) do
+      local itemId = itemInfo and itemInfo.itemId
       local match = false
-      if expectedId then
-        _, _, id = str_find(link, "item:(%d+)")
-        if id then
-          match = (tonumber(id) == expectedId)
-        end
-      else
-        id, name = _ParseItemLink(link)
-        if expectedName and name then
-          match = (name == expectedName)
+      if itemId then
+        if expectedId then
+          match = (itemId == expectedId)
+        elseif expectedName and expectedName ~= "" then
+          local nm = nameCache[itemId]
+          if nm == nil then
+            nm = GetItemInfo and GetItemInfo(itemId) or nil
+            if nm then
+              nameCache[itemId] = nm
+            end
+          end
+          match = (nm and nm == expectedName) and true or false
         end
       end
       if match then
         hasEquipped = true
         if not firstEquippedSlot then
-          firstEquippedSlot = slot
+          firstEquippedSlot = eslot
         end
-
-        -- count stack size / charges for this equipped item
-        local ccount = 1
-        if GetInventoryItemCount then
-          local n = GetInventoryItemCount("player", slot)
-          if n and n > 0 then
-            ccount = n
-          end
+        local ccount = tonumber(itemInfo.stackCount) or 1
+        if ccount <= 0 then
+          ccount = 1
         end
         eqCount = eqCount + ccount
       end
     end
-    slot = slot + 1
   end
 
-  -- Bags 0..4
-  local bag = 0
-  while bag <= 4 do
-    local numSlots = GetContainerNumSlots and GetContainerNumSlots(bag)
-    if numSlots and numSlots > 0 then
-      local bslot = 1
-      while bslot <= numSlots do
-        local link = GetContainerItemLink(bag, bslot)
-        if link then
-          local id, name = nil, nil
+  local bags = snap.bags
+  if not bags and GetBagItems then
+    bags = GetBagItems()
+    snap.bags = bags
+  end
+  if bags then
+    local b = 0
+    while b <= 4 do
+      local bagData = bags[b]
+      if bagData then
+        local bslot, itemInfo
+        for bslot, itemInfo in pairs(bagData) do
+          local itemId = itemInfo and itemInfo.itemId
           local match = false
-          if expectedId then
-            _, _, id = str_find(link, "item:(%d+)")
-            if id then
-              match = (tonumber(id) == expectedId)
-            end
-          else
-            id, name = _ParseItemLink(link)
-            if expectedName and name then
-              match = (name == expectedName)
+          if itemId then
+            if expectedId then
+              match = (itemId == expectedId)
+            elseif expectedName and expectedName ~= "" then
+              local nm = nameCache[itemId]
+              if nm == nil then
+                nm = GetItemInfo and GetItemInfo(itemId) or nil
+                if nm then
+                  nameCache[itemId] = nm
+                end
+              end
+              match = (nm and nm == expectedName) and true or false
             end
           end
           if match then
             hasBag = true
-            if (not firstBagBag) then
-              firstBagBag = bag
+            if firstBagBag == nil then
+              firstBagBag = b
               firstBagSlot = bslot
             end
-
-            -- count items in this bag slot
-            local ccount = 1
-            if GetContainerItemInfo then
-              local _, n = GetContainerItemInfo(bag, bslot)
-              if n and n > 0 then
-                ccount = n
-              end
+            local ccount = tonumber(itemInfo.stackCount) or 1
+            if ccount <= 0 then
+              ccount = 1
             end
             bagCount = bagCount + ccount
           end
         end
-        bslot = bslot + 1
       end
+      b = b + 1
     end
-    bag = bag + 1
   end
 
   -- Store in cache (reusing bagLoc table)
@@ -1255,6 +1310,7 @@ local function _ScanPlayerItemInstances(data)
     if not c then
       c = {}
       _ItemScanCache[cacheKey] = c
+      _ItemScanCacheSize = _ItemScanCacheSize + 1
     end
 
     c.gen = _ItemScanGen
@@ -1293,8 +1349,14 @@ local function _GetInventorySlotState(slot)
   if not slot then
     return false, false, 0, 0, false
   end
-  local link = GetInventoryItemLink("player", slot)
-  if not link then
+  local snap = _GetPlayerItemSnapshot()
+  local eq = snap.eq
+  local info = eq and eq[slot] or nil
+  if (not info) and GetEquippedItem then
+    info = GetEquippedItem("player", slot)
+  end
+  local itemId = info and info.itemId
+  if not itemId then
     return false, false, 0, 0, false
   end
 
@@ -1320,19 +1382,13 @@ local function _GetInventorySlotState(slot)
     DoiteConditions._itemUseCacheN = 0
   end
 
-  local cacheKey = nil
-  local _, _, idStr = str_find(link, "item:(%d+)")
-  if idStr then
-    cacheKey = tonumber(idStr)
-  else
-    cacheKey = link
-  end
+  local cacheKey = itemId
 
   local isUse = useCache[cacheKey]
   if isUse == nil then
     _EnsureTooltip()
     DoiteConditionsTooltip:ClearLines()
-    DoiteConditionsTooltip:SetInventoryItem("player", slot)
+    DoiteConditionsTooltip:SetHyperlink("item:" .. tostring(itemId))
 
     isUse = false
     local i = 1
@@ -1435,7 +1491,8 @@ local function _EvaluateItemCoreState(data, c)
       local idx = _SlotIndexForName(invSlotName)
       local hasItem, onCd, rem, dur
       if invSlotName == "AMMO" then
-        hasItem = (GetInventoryItemTexture("player", ((GetInventorySlotInfo and GetInventorySlotInfo("AmmoSlot")) or INV_SLOT_AMMO)) ~= nil)
+        local snap = _GetPlayerItemSnapshot()
+        hasItem = (snap.ammoId ~= nil)
         onCd = false
         rem = 0
         dur = 0
@@ -1893,22 +1950,20 @@ local function _EvaluateItemCoreState(data, c)
       else
         local slotCount
         if invSlotName == "AMMO" then
-          local ammoSlot = (GetInventorySlotInfo and GetInventorySlotInfo("AmmoSlot")) or INV_SLOT_AMMO
-          local ok, cnt = pcall(GetInventoryItemCount, "player", ammoSlot)
-          if ok and cnt then
-            slotCount = cnt or 0
-          else
-            slotCount = 0
-          end
+          local snap = _GetPlayerItemSnapshot()
+          local cnt = snap.ammoCount or 0
+          slotCount = tonumber(cnt) or 0
           if slotCount < 0 then
             slotCount = 0
           end
         else
           slotCount = 0
           if idx ~= nil then
-            local ok, cnt = pcall(GetInventoryItemCount, "player", idx)
-            if ok and cnt then
-              slotCount = cnt
+            local snap = _GetPlayerItemSnapshot()
+            local eq = snap.eq
+            local info = eq and eq[idx] or nil
+            if info and info.stackCount ~= nil then
+              slotCount = tonumber(info.stackCount) or 0
             end
           end
           if slotCount <= 0 then
@@ -1983,9 +2038,14 @@ local function _EvaluateItemCoreState(data, c)
 
   if kind and loc then
     local hasItem, onCd, rem, dur
+    local snap = _GetPlayerItemSnapshot()
     if kind == "inv" then
-      local link = GetInventoryItemLink("player", loc)
-      hasItem = (link ~= nil)
+      local eq = snap.eq
+      local eqInfo = eq and eq[loc] or nil
+      if (not eqInfo) and GetEquippedItem then
+        eqInfo = GetEquippedItem("player", loc)
+      end
+      hasItem = (eqInfo and eqInfo.itemId) and true or false
       local start, dur0, enable = GetInventoryItemCooldown("player", loc)
       if start and dur0 and start > 0 and dur0 > DOITE_ITEM_CD_IGNORE then
 
@@ -2001,8 +2061,13 @@ local function _EvaluateItemCoreState(data, c)
         dur = dur0 or 0
       end
     else
-      local link = GetContainerItemLink(loc.bag, loc.slot)
-      hasItem = (link ~= nil)
+      local bags = snap.bags
+      local bagData = bags and bags[loc.bag] or nil
+      local bInfo = bagData and bagData[loc.slot] or nil
+      if (not bInfo) and GetBagItem then
+        bInfo = GetBagItem(loc.bag, loc.slot)
+      end
+      hasItem = (bInfo and bInfo.itemId) and true or false
       local start, dur0, enable = GetContainerItemCooldown(loc.bag, loc.slot)
       if start and dur0 and start > 0 and dur0 > DOITE_ITEM_CD_IGNORE then
 
@@ -4604,6 +4669,7 @@ local _timeKeysAbilityItem_live = {}
 local _timeKeysAbilityItem_edit = {}
 local _timeKeysAura_live = {}
 local _timeKeysAura_edit = {}
+local _DA_EMPTY_TABLE = {}
 
 local function _WipeArray(t)
   local n = table.getn(t)
@@ -4761,6 +4827,7 @@ end
 -- Global flags: do we have ANY icons that use targetDistance / targetUnitType?
 local _hasAnyTargetMods_Ability = false
 local _hasAnyTargetMods_Aura = false
+local _hasAnyCustomLogic = false
 
 local function _IconHasTargetMods_AbilityOrItem(data)
   if not data or not data.conditions then
@@ -4792,6 +4859,7 @@ end
 local function _RebuildTargetModsFlags()
   _hasAnyTargetMods_Ability = false
   _hasAnyTargetMods_Aura = false
+  _hasAnyCustomLogic = false
   if DoiteConditions then
     DoiteConditions._hasAnyItemLogic = false
   end
@@ -4801,6 +4869,9 @@ local function _RebuildTargetModsFlags()
     for key, data in pairs(DoiteAurasDB.spells) do
       if type(data) == "table" and data.type then
         local hasItemLogic = false
+        if data.type == "Custom" then
+          _hasAnyCustomLogic = true
+        end
 
         if data.type == "Item" then
           hasItemLogic = true
@@ -4866,6 +4937,9 @@ local function _RebuildTargetModsFlags()
     for key, data in pairs(DoiteDB.icons) do
       if type(data) == "table" and data.type then
         local hasItemLogic = false
+        if data.type == "Custom" then
+          _hasAnyCustomLogic = true
+        end
 
         if data.type == "Item" then
           hasItemLogic = true
@@ -7588,7 +7662,7 @@ function DoiteConditions_UpdateTimeText()
 
   -- Editor-only icons (keys not in live)
   if edit then
-    local skipKeys = live or {}
+    local skipKeys = live or _DA_EMPTY_TABLE
 
     -- Ability/Item keys with time logic
     do
@@ -7667,10 +7741,6 @@ function DoiteConditions_OnUpdate(dt)
 
     if _hasAnyAbilityTimeLogic then
       dirty_ability_time = true
-    end
-
-    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      dirty_aura = true
     end
   end
 
@@ -7764,7 +7834,9 @@ function DoiteConditions_OnUpdate(dt)
   end
 
   -- Custom functions run here near the end of OnUpdate.
-  didCustom = _G.DoiteConditions:EvaluateCustom() and true or false
+  if _hasAnyCustomLogic then
+    didCustom = _G.DoiteConditions:EvaluateCustom() and true or false
+  end
 
   if needAbilityLogic or needAbilityTime or needAura or didCustom then
     dirty_aura, dirty_target, dirty_power = false, false, false
@@ -7795,6 +7867,7 @@ _tick:SetScript("OnUpdate", _DoiteConditions_OnUpdateWrapper)
 if _G.UnitExists and _G.UnitExists("target") then
   DoiteConditions_ScanUnitAuras("target")
 end
+DoiteConditions._daItemSnapshotDirty = true
 dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
 
 ---------------------------------------------------------------
@@ -7814,10 +7887,8 @@ eventFrame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 eventFrame:RegisterEvent("SPELLS_CHANGED")
 eventFrame:RegisterEvent("UNIT_HEALTH")
 eventFrame:RegisterEvent("PLAYER_COMBO_POINTS")
-eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED_GUID")
 eventFrame:RegisterEvent("BAG_UPDATE")
-eventFrame:RegisterEvent("BAG_UPDATE_COOLDOWN")
-eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")
 
@@ -7828,6 +7899,7 @@ eventFrame:SetScript("OnEvent", function()
       DoiteConditions_ScanUnitAuras("target")
     end
     dirty_ability, dirty_aura, dirty_target, dirty_power = true, true, true, true
+    DoiteConditions._daItemSnapshotDirty = true
 
     -- Cache player class for lightweight warrior-specific logic
     local _, cls = UnitClass("player")
@@ -7923,43 +7995,13 @@ eventFrame:SetScript("OnEvent", function()
   elseif event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
     dirty_ability, dirty_aura = true, true
 
-  elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+  elseif event == "UNIT_INVENTORY_CHANGED_GUID" then
     if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+      DoiteConditions._daLastItemDirtyAt = GetTime()
       if _G.DoiteConditions_ClearTrinketFirstMemory then
         _G.DoiteConditions_ClearTrinketFirstMemory()
       end
-      if _InvalidateItemScanCache then
-        _InvalidateItemScanCache()
-      end
-      dirty_ability = true
-      dirty_aura = true
-    end
-
-  elseif event == "BAG_UPDATE_COOLDOWN" then
-    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      if GetTime() >= (DoiteConditions._daLastBagCooldownDirtyAt or 0) then
-        dirty_ability = true
-        dirty_aura = true
-        DoiteConditions._daLastBagCooldownDirtyAt = GetTime() + 0.10
-      end
-    end
-
-  elseif event == "BAG_UPDATE" then
-    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      -- Keep item whereabouts/counts exact when stacks split/merge or the last
-      -- item leaves a bag slot. Throttling this can miss the final state flip
-      -- (bag -> missing) and briefly hide/show wrong icon state.
-      if _InvalidateItemScanCache then
-        _InvalidateItemScanCache()
-      end
-      dirty_ability = true
-    end
-
-  elseif event == "UNIT_INVENTORY_CHANGED" then
-    if arg1 == "player" and DoiteConditions and DoiteConditions._hasAnyItemLogic then
-      if _InvalidateItemScanCache then
-        _InvalidateItemScanCache()
-      end
+      DoiteConditions._daItemSnapshotDirty = true
 
       -- Temp enchant tracking: force a refresh on next evaluation
       local te = DoiteConditions._daTempEnchantCache
@@ -7975,6 +8017,17 @@ eventFrame:SetScript("OnEvent", function()
         end
       end
 
+      dirty_ability = true
+    end
+  elseif event == "BAG_UPDATE" then
+    if DoiteConditions and DoiteConditions._hasAnyItemLogic then
+      local now = GetTime()
+      local lastDirty = DoiteConditions._daLastItemDirtyAt or 0
+      if (now - lastDirty) < 0.05 then
+        return
+      end
+      DoiteConditions._daLastItemDirtyAt = now
+      DoiteConditions._daItemSnapshotDirty = true
       dirty_ability = true
     end
 

@@ -6466,8 +6466,8 @@ local function _Doite_UpdateOverlayForFrame(frame, key, dataTbl, slideActive)
   local last = frame._daLastTextSize or 0
   if math.abs(w - last) >= 1 then
     frame._daLastTextSize = w
-    local remSize = math.max(10, math.floor(w * 0.42))
-    local stackSize = math.max(8, math.floor(w * 0.28))
+    local remSize = math.max(10, math.floor(w * 0.82))
+    local stackSize = math.max(8, math.floor(w * 0.44))
     frame._daRemSize = remSize
     frame._daStackSize = stackSize
     frame._daTextRem:SetFont(GameFontHighlight:GetFont(), remSize, "OUTLINE")
